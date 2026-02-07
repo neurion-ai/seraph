@@ -5,8 +5,6 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 RUN apt update
 RUN apt install gcc g++ git curl -y
 
-# RUN pip install watchdog
-
 # Copy the project into the image
 ADD . /app
 
@@ -14,4 +12,4 @@ ADD . /app
 WORKDIR /app
 RUN uv sync --frozen
 
-CMD ["uv", "run", "main.py"]
+CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003", "--reload"]
