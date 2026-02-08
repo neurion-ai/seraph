@@ -34,18 +34,18 @@ def create_agent(additional_context: str = "") -> ToolCallingAgent:
     model = get_model()
     tools = get_tools()
 
-    system_prompt = (
+    instructions = (
         "You are Seraph, a helpful AI assistant. "
         "You can read and write files, search the web, and fill templates. "
         "Be concise and helpful in your responses."
     )
     if additional_context:
-        system_prompt += f"\n\nConversation history:\n{additional_context}"
+        instructions += f"\n\nConversation history:\n{additional_context}"
 
     agent = ToolCallingAgent(
         tools=tools,
         model=model,
         max_steps=settings.agent_max_steps,
-        system_prompt=system_prompt,
+        instructions=instructions,
     )
     return agent

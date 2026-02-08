@@ -23,7 +23,8 @@ async def chat(request: ChatRequest):
 
     try:
         result = await asyncio.to_thread(agent.run, request.message)
-        response_text = str(result)
+        # agent.run returns a FinalAnswerStep; extract its output
+        response_text = str(result.output) if hasattr(result, "output") else str(result)
     except Exception as e:
         logger.exception("Agent execution failed")
         raise HTTPException(status_code=500, detail=f"Agent error: {e}")

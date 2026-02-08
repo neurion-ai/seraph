@@ -3,6 +3,7 @@ import json
 import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from smolagents import ActionStep, ToolCall, FinalAnswerStep
 
 from src.agent.factory import create_agent
 from src.agent.session import session_manager
@@ -13,10 +14,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _run_agent_streaming(agent, message: str):
-    """Run agent with streaming in a synchronous context, yielding step strings."""
-    for step in agent.run(message, stream=True):
-        yield str(step)
+def _run_agent(agent, message: str) -> list:
+    """Run agent with streaming, collecting all step objects."""
+    return list(agent.run(message, stream=True))
 
 
 @router.websocket("/chat")
@@ -52,23 +52,39 @@ async def websocket_chat(websocket: WebSocket):
             final_result = ""
 
             try:
+                steps = await asyncio.to_thread(_run_agent, agent, ws_msg.message)
 
-                def _stream():
-                    return list(_run_agent_streaming(agent, ws_msg.message))
+                for step in steps:
+                    if isinstance(step, ToolCall):
+                        # Tool invocation — skip final_answer tool calls
+                        if step.name == "final_answer":
+                            continue
+                        step_num += 1
+                        content = f"Calling tool: {step.name}({json.dumps(step.arguments)})"
+                        await websocket.send_text(
+                            WSResponse(
+                                type="step",
+                                content=content,
+                                session_id=session.session_id,
+                                step=step_num,
+                            ).model_dump_json()
+                        )
 
-                steps = await asyncio.to_thread(_stream)
+                    elif isinstance(step, ActionStep):
+                        # Completed step with observations (skip final-answer steps)
+                        if step.observations and not step.is_final_answer:
+                            step_num += 1
+                            await websocket.send_text(
+                                WSResponse(
+                                    type="step",
+                                    content=step.observations,
+                                    session_id=session.session_id,
+                                    step=step_num,
+                                ).model_dump_json()
+                            )
 
-                for step_text in steps:
-                    step_num += 1
-                    final_result = step_text
-                    await websocket.send_text(
-                        WSResponse(
-                            type="step",
-                            content=step_text,
-                            session_id=session.session_id,
-                            step=step_num,
-                        ).model_dump_json()
-                    )
+                    elif isinstance(step, FinalAnswerStep):
+                        final_result = str(step.output)
 
             except Exception as e:
                 logger.exception("Agent streaming failed")

@@ -23,7 +23,16 @@ export class AgentSprite {
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene;
 
-    if (!scene.textures.exists(SPRITE_KEY)) {
+    // Check if the spritesheet loaded with valid frame data
+    const hasValidFrames =
+      scene.textures.exists(SPRITE_KEY) &&
+      scene.textures.get(SPRITE_KEY).frameTotal > 2;
+
+    if (!hasValidFrames) {
+      // Remove broken texture if preload failed
+      if (scene.textures.exists(SPRITE_KEY)) {
+        scene.textures.remove(SPRITE_KEY);
+      }
       this.createFallbackTexture(scene);
     }
     this.sprite = scene.add.sprite(x, y, SPRITE_KEY, 1);
@@ -97,6 +106,16 @@ export class AgentSprite {
     }
 
     canvas.refresh();
+
+    // Add spritesheet frame data (3 cols x 4 rows = 12 frames)
+    const texture = scene.textures.get(SPRITE_KEY);
+    let frameIndex = 0;
+    for (let row = 0; row < 4; row++) {
+      for (let col = 0; col < 3; col++) {
+        texture.add(frameIndex, 0, col * FRAME_W, row * FRAME_H, FRAME_W, FRAME_H);
+        frameIndex++;
+      }
+    }
   }
 
   private createAnimations() {

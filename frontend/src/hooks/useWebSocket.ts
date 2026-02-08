@@ -15,7 +15,6 @@ export function useWebSocket() {
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const {
-    sessionId,
     addMessage,
     setSessionId,
     setConnectionStatus,
@@ -23,6 +22,12 @@ export function useWebSocket() {
   } = useChatStore();
 
   const { onToolDetected, onFinalAnswer, onThinking } = useAgentAnimation();
+
+  // Store animation callbacks in refs so `connect` doesn't depend on them
+  const onToolDetectedRef = useRef(onToolDetected);
+  const onFinalAnswerRef = useRef(onFinalAnswer);
+  onToolDetectedRef.current = onToolDetected;
+  onFinalAnswerRef.current = onFinalAnswer;
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -46,14 +51,15 @@ export function useWebSocket() {
 
         if (data.type === "pong") return;
 
-        if (data.session_id && !sessionId) {
-          setSessionId(data.session_id);
+        if (data.session_id) {
+          const current = useChatStore.getState().sessionId;
+          if (!current) setSessionId(data.session_id);
         }
 
         if (data.type === "step") {
           const tool = detectToolFromStep(data.content);
           if (tool) {
-            onToolDetected(tool);
+            onToolDetectedRef.current(tool);
           }
 
           const stepMsg: ChatMessage = {
@@ -67,7 +73,7 @@ export function useWebSocket() {
           addMessage(stepMsg);
         } else if (data.type === "final") {
           setAgentBusy(false);
-          onFinalAnswer(data.content);
+          onFinalAnswerRef.current(data.content);
 
           const agentMsg: ChatMessage = {
             id: makeId(),
@@ -102,7 +108,7 @@ export function useWebSocket() {
       setConnectionStatus("error");
       ws.close();
     };
-  }, [sessionId, addMessage, setSessionId, setConnectionStatus, setAgentBusy, onToolDetected, onFinalAnswer]);
+  }, [addMessage, setSessionId, setConnectionStatus, setAgentBusy]);
 
   const sendMessage = useCallback(
     (message: string) => {
@@ -119,6 +125,7 @@ export function useWebSocket() {
       };
       addMessage(userMsg);
 
+      const sessionId = useChatStore.getState().sessionId;
       wsRef.current.send(
         JSON.stringify({
           type: "message",
@@ -127,7 +134,7 @@ export function useWebSocket() {
         })
       );
     },
-    [sessionId, addMessage, setAgentBusy, onThinking]
+    [addMessage, setAgentBusy, onThinking]
   );
 
   useEffect(() => {

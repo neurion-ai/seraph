@@ -12,7 +12,7 @@ dependencies = [
     "mcp>=1.7.0",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.6.0",
-    "duckduckgo-search>=7.0.0",
+    "ddgs>=7.0.0",
     "websockets>=14.0",
 ]
 
