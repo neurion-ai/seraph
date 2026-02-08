@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { EventBus } from "../EventBus";
 import { AgentSprite } from "../objects/AgentSprite";
 import { SpeechBubble } from "../objects/SpeechBubble";
+import { UserSprite } from "../objects/UserSprite";
 import { SCENE } from "../../config/constants";
 
 interface ToolMovePayload {
@@ -218,6 +219,7 @@ const WATER_DETAILS: Array<{ x: number; y: number; type: number }> = [
 
 export class StudyScene extends Phaser.Scene {
   private agent!: AgentSprite;
+  private userAvatar!: UserSprite;
   private speechBubble!: SpeechBubble;
   private label!: Phaser.GameObjects.Text;
 
@@ -274,6 +276,7 @@ export class StudyScene extends Phaser.Scene {
       this.load.image(variants.night, `assets/village/${variants.night}.png`);
     }
     AgentSprite.preload(this);
+    UserSprite.preload(this);
   }
 
   // ─── Create ──────────────────────────────────────────
@@ -318,9 +321,19 @@ export class StudyScene extends Phaser.Scene {
     // --- Forest (outside village) ---
     this.generateForest(canvasW, canvasH);
 
-    // --- Agent ---
+    // --- Agent (Seraph) ---
     const startPos = this.worldPos(SCENE.POSITIONS.bench);
     this.agent = new AgentSprite(this, startPos.x, startPos.y);
+
+    // Make Seraph clickable — opens chat panel
+    this.agent.sprite.setInteractive({ useHandCursor: true });
+    this.agent.sprite.on("pointerdown", () => {
+      EventBus.emit("open-chat");
+    });
+
+    // --- User Avatar (clickable — opens quest log) ---
+    const userPos = this.worldPos({ x: 832, y: 340 });
+    this.userAvatar = new UserSprite(this, userPos.x, userPos.y);
 
     // --- Speech Bubble ---
     this.speechBubble = new SpeechBubble(this, SCENE.MAP_PIXEL_WIDTH, this.villageOffsetX);
@@ -418,6 +431,7 @@ export class StudyScene extends Phaser.Scene {
     if (this.dayNightTimer) this.dayNightTimer.remove(false);
 
     this.agent.destroy();
+    this.userAvatar.destroy();
     this.speechBubble.destroy();
   }
 

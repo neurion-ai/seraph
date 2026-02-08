@@ -355,3 +355,4 @@ yarn-error.log*
 next-env.d.ts
 
 docker-data
+.claude/settings.local.json
