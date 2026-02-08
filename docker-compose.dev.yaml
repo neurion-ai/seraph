@@ -12,6 +12,7 @@ services:
     volumes:
       - ./backend/src:/app/src
       - ./backend/config:/app/config
+      - ./backend/tests:/app/tests
       - ./backend/main.py:/app/main.py
       - ./backend/pyproject.toml:/app/pyproject.toml
       - ./backend/uv.lock:/app/uv.lock
@@ -24,6 +25,30 @@ services:
       - seraph-network-dev
     ports:
       - "8004:8003" # Non-standard port for dev
+
+  frontend-dev:
+    container_name: frontend-dev
+    build:
+      context: ./frontend
+      dockerfile: ./Dockerfile
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.ts:/app/vite.config.ts
+      - ./frontend/tailwind.config.ts:/app/tailwind.config.ts
+      - ./frontend/postcss.config.js:/app/postcss.config.js
+      - ./frontend/tsconfig.json:/app/tsconfig.json
+      - ./frontend/tsconfig.app.json:/app/tsconfig.app.json
+      - ./frontend/tsconfig.node.json:/app/tsconfig.node.json
+    env_file:
+      - .env.dev
+    networks:
+      - seraph-network-dev
+    ports:
+      - "3000:5173"
+    depends_on:
+      - backend-dev
 
 networks:
   seraph-network-dev:
