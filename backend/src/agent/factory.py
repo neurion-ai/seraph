@@ -1,5 +1,3 @@
-import os
-
 from smolagents import LiteLLMModel, ToolCallingAgent
 
 from config.settings import settings

@@ -29,6 +29,11 @@ def shell_execute(code: str, language: str = "python") -> str:
     if language != "python":
         return f"Error: Only 'python' is currently supported, got '{language}'."
 
+    # Limit code size to prevent DoS
+    max_code_size = 100_000  # 100KB
+    if len(code) > max_code_size:
+        return f"Error: Code too large ({len(code)} bytes). Maximum is {max_code_size} bytes."
+
     sandbox_url = settings.sandbox_url
     try:
         with httpx.Client(timeout=settings.sandbox_timeout) as client:

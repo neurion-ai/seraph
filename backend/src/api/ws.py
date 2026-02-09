@@ -128,18 +128,18 @@ async def websocket_chat(websocket: WebSocket):
 
             # After a few onboarding exchanges, mark complete
             if is_onboarding:
-                history = await session_manager.get_history_text(session.id)
-                msg_count = history.count("\n") + 1
+                msg_count = await session_manager.count_messages(session.id)
                 if msg_count >= 6:  # ~3 user messages + 3 agent responses
                     await mark_onboarding_complete()
                     logger.info("Onboarding completed")
 
-            # Trigger memory consolidation in background
-            try:
-                from src.memory.consolidator import consolidate_session
-                asyncio.create_task(consolidate_session(session.id))
-            except ImportError:
-                pass
+            # Trigger memory consolidation in background (only for assistant responses)
+            if final_result:
+                try:
+                    from src.memory.consolidator import consolidate_session
+                    asyncio.create_task(consolidate_session(session.id))
+                except ImportError:
+                    pass
 
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected")

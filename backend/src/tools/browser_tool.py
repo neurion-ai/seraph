@@ -1,13 +1,40 @@
 """Browser automation tool — extracts content from web pages using Playwright."""
 
 import asyncio
+import ipaddress
 import logging
+from urllib.parse import urlparse
 
 from smolagents import tool
 
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
+
+# Block access to internal/private networks
+_BLOCKED_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "[::1]"}
+
+
+def _is_internal_url(url: str) -> bool:
+    """Check if a URL points to an internal/private network address."""
+    parsed = urlparse(url)
+    hostname = parsed.hostname or ""
+
+    if hostname in _BLOCKED_HOSTS:
+        return True
+
+    # Check for private IP ranges
+    try:
+        ip = ipaddress.ip_address(hostname)
+        return ip.is_private or ip.is_loopback or ip.is_link_local
+    except ValueError:
+        pass
+
+    # Block common internal hostnames
+    if hostname.endswith((".local", ".internal", ".localhost")):
+        return True
+
+    return False
 
 
 async def _browse(url: str, action: str) -> str:
@@ -38,7 +65,7 @@ async def _browse(url: str, action: str) -> str:
                 screenshot = await page.screenshot(type="png")
                 import base64
                 encoded = base64.b64encode(screenshot).decode("utf-8")
-                return f"Screenshot captured ({len(screenshot)} bytes). Base64: {encoded[:200]}..."
+                return f"Screenshot captured ({len(screenshot)} bytes). Base64 data: {encoded}"
 
             elif action == "html":
                 html = await page.content()
@@ -82,18 +109,17 @@ def browse_webpage(url: str, action: str = "extract") -> str:
     if not url.startswith(("http://", "https://")):
         return "Error: URL must start with http:// or https://"
 
+    if _is_internal_url(url):
+        return "Error: Access to internal/private network addresses is not allowed."
+
     if action not in ("extract", "html", "screenshot"):
         return f"Error: action must be 'extract', 'html', or 'screenshot', got '{action}'"
 
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                result = pool.submit(asyncio.run, _browse(url, action)).result()
-            return result
-        else:
-            return asyncio.run(_browse(url, action))
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            result = pool.submit(asyncio.run, _browse(url, action)).result()
+        return result
     except Exception as e:
         logger.exception("Browser automation failed")
         return f"Error browsing {url}: {e}"
