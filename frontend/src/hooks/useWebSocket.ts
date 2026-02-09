@@ -40,6 +40,7 @@ export function useWebSocket() {
 
     ws.onopen = () => {
       setConnectionStatus("connected");
+      useChatStore.getState().fetchProfile();
       pingRef.current = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: "ping" }));
@@ -85,8 +86,18 @@ export function useWebSocket() {
           };
           addMessage(agentMsg);
 
-          // Refresh session list after a conversation turn
-          useChatStore.getState().loadSessions();
+          // Refresh session list and profile after a conversation turn
+          useChatStore.getState().fetchProfile();
+          useChatStore.getState().loadSessions().then(() => {
+            // Auto-name session if still "New Conversation"
+            if (data.session_id) {
+              const updated = useChatStore.getState();
+              const session = updated.sessions.find((s) => s.id === data.session_id);
+              if (session && session.title === "New Conversation") {
+                updated.generateSessionTitle(data.session_id);
+              }
+            }
+          });
         } else if (data.type === "error") {
           setAgentBusy(false);
 
@@ -146,6 +157,12 @@ export function useWebSocket() {
     };
   }, [addMessage, setSessionId, setConnectionStatus, setAgentBusy, setAmbientState, setChatPanelOpen]);
 
+  const skipOnboarding = useCallback(() => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    wsRef.current.send(JSON.stringify({ type: "skip_onboarding" }));
+    useChatStore.getState().setOnboardingCompleted(true);
+  }, []);
+
   const sendMessage = useCallback(
     (message: string) => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
@@ -182,5 +199,5 @@ export function useWebSocket() {
     };
   }, [connect]);
 
-  return { sendMessage };
+  return { sendMessage, skipOnboarding };
 }

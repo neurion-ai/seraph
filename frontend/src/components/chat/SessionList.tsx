@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useChatStore } from "../../stores/chatStore";
 
 export function SessionList() {
@@ -8,13 +8,32 @@ export function SessionList() {
   const switchSession = useChatStore((s) => s.switchSession);
   const newSession = useChatStore((s) => s.newSession);
   const deleteSession = useChatStore((s) => s.deleteSession);
+  const renameSession = useChatStore((s) => s.renameSession);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
 
+  useEffect(() => {
+    if (editingId && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editingId]);
+
+  const commitRename = async () => {
+    if (editingId && editingTitle.trim()) {
+      await renameSession(editingId, editingTitle.trim());
+    }
+    setEditingId(null);
+  };
+
   return (
-    <div className="flex flex-col gap-1 max-h-[120px] overflow-y-auto retro-scrollbar">
+    <div className="flex flex-col gap-1 py-1">
       <button
         onClick={() => {
           newSession();
@@ -31,12 +50,30 @@ export function SessionList() {
             s.id === sessionId ? "bg-retro-accent/50 text-retro-highlight" : "text-retro-text/60"
           }`}
         >
-          <button
-            className="flex-1 text-left truncate"
-            onClick={() => switchSession(s.id)}
-          >
-            {s.title}
-          </button>
+          {editingId === s.id ? (
+            <input
+              ref={inputRef}
+              value={editingTitle}
+              onChange={(e) => setEditingTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitRename();
+                if (e.key === "Escape") setEditingId(null);
+              }}
+              onBlur={commitRename}
+              className="flex-1 bg-retro-panel border border-retro-border/40 text-[8px] text-retro-text px-1 py-0 outline-none"
+            />
+          ) : (
+            <button
+              className="flex-1 text-left truncate"
+              onClick={() => switchSession(s.id)}
+              onDoubleClick={() => {
+                setEditingId(s.id);
+                setEditingTitle(s.title);
+              }}
+            >
+              {s.title}
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();

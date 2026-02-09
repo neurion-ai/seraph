@@ -33,6 +33,29 @@ export const TOOL_NAMES = {
   UPDATE_GOAL: "update_goal",
   GET_GOALS: "get_goals",
   GET_GOAL_PROGRESS: "get_goal_progress",
+  // Things3 MCP tools
+  GET_INBOX: "get_inbox",
+  GET_TODAY: "get_today",
+  GET_UPCOMING: "get_upcoming",
+  GET_ANYTIME: "get_anytime",
+  GET_SOMEDAY: "get_someday",
+  GET_LOGBOOK: "get_logbook",
+  GET_TRASH: "get_trash",
+  GET_TODOS: "get_todos",
+  GET_PROJECTS: "get_projects",
+  GET_AREAS: "get_areas",
+  GET_TAGS: "get_tags",
+  GET_TAGGED_ITEMS: "get_tagged_items",
+  GET_HEADINGS: "get_headings",
+  SEARCH_TODOS: "search_todos",
+  SEARCH_ADVANCED: "search_advanced",
+  GET_RECENT: "get_recent",
+  ADD_TODO: "add_todo",
+  ADD_PROJECT: "add_project",
+  UPDATE_TODO: "update_todo",
+  UPDATE_PROJECT: "update_project",
+  SHOW_ITEM: "show_item",
+  SEARCH_ITEMS: "search_items",
 } as const;
 
 export const SCENE = {
@@ -41,7 +64,7 @@ export const SCENE = {
   MAP_ROWS: 32,
   MAP_PIXEL_WIDTH: 1024,  // 64 * 16
   MAP_PIXEL_HEIGHT: 512,  // 32 * 16
-  SPRITE_SCALE: 1,
+  SPRITE_SCALE: 2,
   WALK_SPEED: 300,
 
   // Tool station positions (village-local coords — where agent walks to)
@@ -54,6 +77,7 @@ export const SCENE = {
     tower:   { x: 640, y: 200 },    // TOWER — browse_webpage
     clock:   { x: 576, y: 340 },    // CLOCK — calendar
     mailbox: { x: 128, y: 340 },    // MAILBOX — email
+    userHome: { x: 832, y: 340 },   // User avatar default position
   },
 
   COLORS: {

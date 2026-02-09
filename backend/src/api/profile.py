@@ -14,10 +14,10 @@ router = APIRouter()
 async def get_or_create_profile() -> UserProfile:
     """Get the singleton user profile, creating it if needed."""
     async with get_db() as db:
-        result = await db.exec(
+        result = await db.execute(
             select(UserProfile).where(UserProfile.id == "singleton")
         )
-        profile = result.first()
+        profile = result.scalars().first()
         if profile:
             return profile
 
@@ -32,12 +32,27 @@ async def mark_onboarding_complete() -> None:
     from datetime import datetime, timezone
 
     async with get_db() as db:
-        result = await db.exec(
+        result = await db.execute(
             select(UserProfile).where(UserProfile.id == "singleton")
         )
-        profile = result.first()
+        profile = result.scalars().first()
         if profile:
             profile.onboarding_completed = True
+            profile.updated_at = datetime.now(timezone.utc)
+            db.add(profile)
+
+
+async def reset_onboarding() -> None:
+    """Reset onboarding so the user goes through it again."""
+    from datetime import datetime, timezone
+
+    async with get_db() as db:
+        result = await db.execute(
+            select(UserProfile).where(UserProfile.id == "singleton")
+        )
+        profile = result.scalars().first()
+        if profile:
+            profile.onboarding_completed = False
             profile.updated_at = datetime.now(timezone.utc)
             db.add(profile)
 
@@ -50,3 +65,17 @@ async def get_profile():
         "name": profile.name,
         "onboarding_completed": profile.onboarding_completed,
     }
+
+
+@router.post("/user/onboarding/skip")
+async def skip_onboarding():
+    """Skip onboarding and unlock the full agent."""
+    await mark_onboarding_complete()
+    return {"status": "ok", "onboarding_completed": True}
+
+
+@router.post("/user/onboarding/restart")
+async def restart_onboarding():
+    """Restart onboarding from scratch."""
+    await reset_onboarding()
+    return {"status": "ok", "onboarding_completed": False}

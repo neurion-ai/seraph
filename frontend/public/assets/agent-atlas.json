@@ -1,4 +1,4 @@
- {
+{
     "frames": [
         {
             "filename": "down-walk.000",
@@ -44,7 +44,33 @@
             "frame": {
                 "w": 32,
                 "h": 32,
-                "x": 32,
+                "x": 96,
+                "y": 0
+            },
+            "anchor": {
+                "x": 0.5,
+                "y": 0.5
+            }
+        },
+        {
+            "filename": "down-walk.004",
+            "frame": {
+                "w": 32,
+                "h": 32,
+                "x": 128,
+                "y": 0
+            },
+            "anchor": {
+                "x": 0.5,
+                "y": 0.5
+            }
+        },
+        {
+            "filename": "down-walk.005",
+            "frame": {
+                "w": 32,
+                "h": 32,
+                "x": 160,
                 "y": 0
             },
             "anchor": {
@@ -57,7 +83,7 @@
             "frame": {
                 "w": 32,
                 "h": 32,
-                "x": 32,
+                "x": 0,
                 "y": 0
             },
             "anchor": {
@@ -65,8 +91,6 @@
                 "y": 0.5
             }
         },
-
-
         {
             "filename": "left-walk.000",
             "frame": {
@@ -111,7 +135,33 @@
             "frame": {
                 "w": 32,
                 "h": 32,
-                "x": 32,
+                "x": 96,
+                "y": 32
+            },
+            "anchor": {
+                "x": 0.5,
+                "y": 0.5
+            }
+        },
+        {
+            "filename": "left-walk.004",
+            "frame": {
+                "w": 32,
+                "h": 32,
+                "x": 128,
+                "y": 32
+            },
+            "anchor": {
+                "x": 0.5,
+                "y": 0.5
+            }
+        },
+        {
+            "filename": "left-walk.005",
+            "frame": {
+                "w": 32,
+                "h": 32,
+                "x": 160,
                 "y": 32
             },
             "anchor": {
@@ -124,7 +174,7 @@
             "frame": {
                 "w": 32,
                 "h": 32,
-                "x": 32,
+                "x": 0,
                 "y": 32
             },
             "anchor": {
@@ -132,10 +182,6 @@
                 "y": 0.5
             }
         },
-
-
-
-
         {
             "filename": "right-walk.000",
             "frame": {
@@ -180,7 +226,33 @@
             "frame": {
                 "w": 32,
                 "h": 32,
-                "x": 32,
+                "x": 96,
+                "y": 64
+            },
+            "anchor": {
+                "x": 0.5,
+                "y": 0.5
+            }
+        },
+        {
+            "filename": "right-walk.004",
+            "frame": {
+                "w": 32,
+                "h": 32,
+                "x": 128,
+                "y": 64
+            },
+            "anchor": {
+                "x": 0.5,
+                "y": 0.5
+            }
+        },
+        {
+            "filename": "right-walk.005",
+            "frame": {
+                "w": 32,
+                "h": 32,
+                "x": 160,
                 "y": 64
             },
             "anchor": {
@@ -193,7 +265,7 @@
             "frame": {
                 "w": 32,
                 "h": 32,
-                "x": 32,
+                "x": 0,
                 "y": 64
             },
             "anchor": {
@@ -201,10 +273,6 @@
                 "y": 0.5
             }
         },
-
-
-
-
         {
             "filename": "up-walk.000",
             "frame": {
@@ -249,7 +317,33 @@
             "frame": {
                 "w": 32,
                 "h": 32,
-                "x": 32,
+                "x": 96,
+                "y": 96
+            },
+            "anchor": {
+                "x": 0.5,
+                "y": 0.5
+            }
+        },
+        {
+            "filename": "up-walk.004",
+            "frame": {
+                "w": 32,
+                "h": 32,
+                "x": 128,
+                "y": 96
+            },
+            "anchor": {
+                "x": 0.5,
+                "y": 0.5
+            }
+        },
+        {
+            "filename": "up-walk.005",
+            "frame": {
+                "w": 32,
+                "h": 32,
+                "x": 160,
                 "y": 96
             },
             "anchor": {
@@ -262,7 +356,7 @@
             "frame": {
                 "w": 32,
                 "h": 32,
-                "x": 32,
+                "x": 0,
                 "y": 96
             },
             "anchor": {
@@ -272,7 +366,10 @@
         }
     ],
     "meta": {
-        "description": "Atlas generado con Atlas Packer Gamma V2",
-        "web": "https://gammafp.github.io/atlas-packer-phaser/"
+        "description": "Seraph agent sprite - generated with PixelLab AI",
+        "size": {
+            "w": 192,
+            "h": 128
+        }
     }
 }
