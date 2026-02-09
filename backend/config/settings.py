@@ -16,6 +16,14 @@ class Settings(BaseSettings):
     memory_search_top_k: int = 5
     session_history_window: int = 50
 
+    # Phase 2 — Capable Executor
+    sandbox_url: str = "http://sandbox:8060"
+    sandbox_timeout: int = 35
+    browser_timeout: int = 30
+    google_credentials_path: str = "/app/config/google_credentials.json"
+    google_calendar_token_path: str = "/app/data/google_calendar_token.json"
+    google_gmail_token_path: str = "/app/data/google_gmail_token.json"
+
     # Phase 3 — Scheduler & Proactivity
     scheduler_enabled: bool = True
     proactivity_level: int = 3  # 1-5 scale

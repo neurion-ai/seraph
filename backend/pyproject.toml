@@ -21,6 +21,7 @@ dependencies = [
     "lancedb>=0.17.0",
     "sentence-transformers>=3.4.0",
     # Phase 2 — Capable Executor
+    "httpx>=0.28.0",
     "playwright>=1.49.0",
     "gcsa>=2.6.0",
     "google-auth-oauthlib>=1.2.0",

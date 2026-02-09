@@ -3,12 +3,7 @@ import os
 from smolagents import LiteLLMModel, ToolCallingAgent
 
 from config.settings import settings
-from src.memory.soul import read_soul
-from src.tools.filesystem_tool import read_file, write_file
-from src.tools.goal_tools import create_goal, update_goal, get_goals, get_goal_progress
-from src.tools.soul_tool import view_soul, update_soul
-from src.tools.template_tool import fill_template
-from src.tools.web_search_tool import web_search
+from src.plugins.loader import discover_tools
 
 
 def get_model() -> LiteLLMModel:
@@ -23,12 +18,8 @@ def get_model() -> LiteLLMModel:
 
 
 def get_tools() -> list:
-    """Return the list of tools available to the agent."""
-    return [
-        read_file, write_file, web_search, fill_template,
-        view_soul, update_soul,
-        create_goal, update_goal, get_goals, get_goal_progress,
-    ]
+    """Return all auto-discovered tools."""
+    return discover_tools()
 
 
 def create_agent(
