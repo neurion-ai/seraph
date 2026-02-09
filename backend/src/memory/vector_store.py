@@ -91,6 +91,10 @@ def search(
     results = table.search(query_vector).limit(top_k)
 
     if category_filter:
+        # Use parameterized filter to prevent injection
+        allowed_categories = {"fact", "preference", "pattern", "goal", "reflection"}
+        if category_filter not in allowed_categories:
+            return []
         results = results.where(f"category = '{category_filter}'")
 
     rows = results.to_list()

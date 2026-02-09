@@ -16,18 +16,23 @@ class SessionManager:
                 result = await db.exec(select(Session).where(Session.id == session_id))
                 session = result.first()
                 if session:
+                    db.expunge(session)
                     return session
 
             new_id = session_id or uuid.uuid4().hex
             session = Session(id=new_id, title="New Conversation")
             db.add(session)
             await db.flush()
+            db.expunge(session)
             return session
 
     async def get(self, session_id: str) -> Session | None:
         async with get_session() as db:
             result = await db.exec(select(Session).where(Session.id == session_id))
-            return result.first()
+            session = result.first()
+            if session:
+                db.expunge(session)
+            return session
 
     async def delete(self, session_id: str) -> bool:
         async with get_session() as db:
@@ -107,6 +112,7 @@ class SessionManager:
                 session.updated_at = datetime.utcnow()
                 db.add(session)
             await db.flush()
+            db.expunge(msg)
             return msg
 
     async def get_history_text(
@@ -151,6 +157,16 @@ class SessionManager:
                 }
                 for m in result.all()
             ]
+
+    async def count_messages(self, session_id: str) -> int:
+        """Count user+assistant messages in a session."""
+        async with get_session() as db:
+            result = await db.exec(
+                select(Message)
+                .where(Message.session_id == session_id)
+                .where(Message.role.in_(["user", "assistant"]))  # type: ignore[attr-defined]
+            )
+            return len(result.all())
 
 
 session_manager = SessionManager()
