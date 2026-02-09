@@ -17,6 +17,7 @@ interface ChatStore {
   agentVisual: AgentVisualState;
   ambientState: AmbientState;
   chatPanelOpen: boolean;
+  chatMaximized: boolean;
   questPanelOpen: boolean;
   settingsOpen: boolean;
   onboardingCompleted: boolean | null;
@@ -31,6 +32,7 @@ interface ChatStore {
   resetAgentVisual: () => void;
   setAmbientState: (state: AmbientState) => void;
   setChatPanelOpen: (open: boolean) => void;
+  toggleChatMaximized: () => void;
   setQuestPanelOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
   setOnboardingCompleted: (completed: boolean) => void;
@@ -61,6 +63,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   agentVisual: { ...defaultVisual },
   ambientState: "idle",
   chatPanelOpen: true,
+  chatMaximized: false,
   questPanelOpen: false,
   settingsOpen: false,
   onboardingCompleted: null,
@@ -89,6 +92,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   setChatPanelOpen: (open) =>
     set({ chatPanelOpen: open, questPanelOpen: open ? false : get().questPanelOpen }),
+
+  toggleChatMaximized: () => set((state) => ({ chatMaximized: !state.chatMaximized })),
 
   setQuestPanelOpen: (open) =>
     set({ questPanelOpen: open, chatPanelOpen: open ? false : get().chatPanelOpen }),
