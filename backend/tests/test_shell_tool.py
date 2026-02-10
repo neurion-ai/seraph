@@ -1,0 +1,75 @@
+"""Tests for shell_execute tool (src/tools/shell_tool.py)."""
+
+from unittest.mock import MagicMock, patch
+
+import httpx
+import pytest
+
+from src.tools.shell_tool import shell_execute
+
+
+class TestShellExecute:
+    @patch("src.tools.shell_tool.httpx.Client")
+    def test_success(self, MockClient):
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"stdout": "hello\n", "returncode": 0}
+        mock_resp.raise_for_status = MagicMock()
+        MockClient.return_value.__enter__ = MagicMock(return_value=MagicMock(post=MagicMock(return_value=mock_resp)))
+        MockClient.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = shell_execute('print("hello")')
+        assert "hello" in result
+
+    @patch("src.tools.shell_tool.httpx.Client")
+    def test_error_returncode(self, MockClient):
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"stdout": "", "returncode": 1, "stderr": "NameError"}
+        mock_resp.raise_for_status = MagicMock()
+        MockClient.return_value.__enter__ = MagicMock(return_value=MagicMock(post=MagicMock(return_value=mock_resp)))
+        MockClient.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = shell_execute("bad_code")
+        assert "Exit code 1" in result
+        assert "NameError" in result
+
+    @patch("src.tools.shell_tool.httpx.Client")
+    def test_no_output(self, MockClient):
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"stdout": "", "returncode": 0}
+        mock_resp.raise_for_status = MagicMock()
+        MockClient.return_value.__enter__ = MagicMock(return_value=MagicMock(post=MagicMock(return_value=mock_resp)))
+        MockClient.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = shell_execute("x = 1")
+        assert result == "(no output)"
+
+    def test_wrong_language(self):
+        result = shell_execute("echo hello", language="bash")
+        assert "Error" in result
+        assert "python" in result.lower()
+
+    def test_code_too_large(self):
+        code = "x" * 200_000
+        result = shell_execute(code)
+        assert "Error" in result
+        assert "too large" in result.lower()
+
+    @patch("src.tools.shell_tool.httpx.Client")
+    def test_timeout(self, MockClient):
+        MockClient.return_value.__enter__ = MagicMock(
+            return_value=MagicMock(post=MagicMock(side_effect=httpx.TimeoutException("timeout")))
+        )
+        MockClient.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = shell_execute("import time; time.sleep(999)")
+        assert "timed out" in result.lower()
+
+    @patch("src.tools.shell_tool.httpx.Client")
+    def test_connection_error(self, MockClient):
+        MockClient.return_value.__enter__ = MagicMock(
+            return_value=MagicMock(post=MagicMock(side_effect=httpx.ConnectError("refused")))
+        )
+        MockClient.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = shell_execute("print(1)")
+        assert "not available" in result.lower()
