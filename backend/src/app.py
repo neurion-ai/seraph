@@ -14,9 +14,11 @@ async def lifespan(app: FastAPI):
     await init_db()
     ensure_soul_exists()
     if settings.things_mcp_url:
-        mcp_manager.connect(settings.things_mcp_url)
+        mcp_manager.connect("things", settings.things_mcp_url)
+    if settings.github_mcp_url:
+        mcp_manager.connect("github", settings.github_mcp_url)
     yield
-    mcp_manager.disconnect()
+    mcp_manager.disconnect_all()
     await close_db()
 
 
