@@ -72,9 +72,26 @@ backend/
 ./manage.sh -e dev build       # Rebuild
 ```
 
+## Testing
+
+```bash
+# Backend (from backend/)
+cd backend
+uv run pytest -v              # Run all tests with coverage
+
+# Frontend (from frontend/)
+cd frontend
+npm test                       # Run all tests
+npm run test:watch             # Watch mode
+npm run test:coverage          # With coverage report
+```
+
+See [Testing Guide](./development/testing) for full details.
+
 ## Current Status
 
 - **Phase 0** (Foundation): Complete
 - **Phase 1** (Persistent Identity): Complete — DB, soul/memory, goals, onboarding, quest UI, two-pane chat sidebar, session auto-naming, sprite tooltips, chat maximize/close controls, HUD panel buttons, session persistence (localStorage)
 - **Phase 2** (Capable Executor): Complete — shell, browser, calendar, email, plugin system
 - **Phase 3** (The Observer): Planned — scheduler, context awareness, proactive reasoning
+- **Phase 4** (The Network): Planned — SKILL.md ecosystem, multi-channel messaging, workflows, multi-agent, voice, canvas, remote access
