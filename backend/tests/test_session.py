@@ -1,74 +1,168 @@
-from src.agent.session import Session, SessionManager
+"""Tests for the async DB-backed SessionManager (src/agent/session.py)."""
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from src.agent.session import SessionManager
 
 
-class TestSession:
-    def test_create_session(self):
-        session = Session(session_id="test-1")
-        assert session.session_id == "test-1"
-        assert session.messages == []
-
-    def test_add_message(self):
-        session = Session(session_id="test-1")
-        session.add_message("user", "Hello")
-        session.add_message("assistant", "Hi there!")
-        assert len(session.messages) == 2
-        assert session.messages[0] == {"role": "user", "content": "Hello"}
-        assert session.messages[1] == {"role": "assistant", "content": "Hi there!"}
-
-    def test_get_history_text_empty(self):
-        session = Session(session_id="test-1")
-        assert session.get_history_text() == ""
-
-    def test_get_history_text(self):
-        session = Session(session_id="test-1")
-        session.add_message("user", "Hello")
-        session.add_message("assistant", "Hi!")
-        history = session.get_history_text()
-        assert "User: Hello" in history
-        assert "Assistant: Hi!" in history
+@pytest.fixture
+def sm():
+    return SessionManager()
 
 
-class TestSessionManager:
-    def test_get_or_create_new(self):
-        mgr = SessionManager()
-        session = mgr.get_or_create()
-        assert session.session_id
-        assert len(mgr.list_sessions()) == 1
+class TestGetOrCreate:
+    async def test_creates_new_without_id(self, async_db, sm):
+        session = await sm.get_or_create()
+        assert session.id
+        assert session.title == "New Conversation"
 
-    def test_get_or_create_with_id(self):
-        mgr = SessionManager()
-        session = mgr.get_or_create("my-session")
-        assert session.session_id == "my-session"
+    async def test_creates_new_with_id(self, async_db, sm):
+        session = await sm.get_or_create("my-sess")
+        assert session.id == "my-sess"
 
-    def test_get_or_create_existing(self):
-        mgr = SessionManager()
-        s1 = mgr.get_or_create("s1")
-        s1.add_message("user", "Hello")
-        s2 = mgr.get_or_create("s1")
-        assert s1 is s2
-        assert len(s2.messages) == 1
+    async def test_returns_existing(self, async_db, sm):
+        s1 = await sm.get_or_create("s1")
+        s2 = await sm.get_or_create("s1")
+        assert s1.id == s2.id
 
-    def test_get_existing(self):
-        mgr = SessionManager()
-        mgr.get_or_create("s1")
-        assert mgr.get("s1") is not None
+    async def test_creates_when_id_not_found(self, async_db, sm):
+        session = await sm.get_or_create("new-id")
+        assert session.id == "new-id"
 
-    def test_get_nonexistent(self):
-        mgr = SessionManager()
-        assert mgr.get("nope") is None
 
-    def test_delete(self):
-        mgr = SessionManager()
-        mgr.get_or_create("s1")
-        assert mgr.delete("s1") is True
-        assert mgr.get("s1") is None
+class TestGet:
+    async def test_existing(self, async_db, sm):
+        await sm.get_or_create("s1")
+        assert (await sm.get("s1")) is not None
 
-    def test_delete_nonexistent(self):
-        mgr = SessionManager()
-        assert mgr.delete("nope") is False
+    async def test_nonexistent(self, async_db, sm):
+        assert (await sm.get("nope")) is None
 
-    def test_list_sessions(self):
-        mgr = SessionManager()
-        mgr.get_or_create("a")
-        mgr.get_or_create("b")
-        assert sorted(mgr.list_sessions()) == ["a", "b"]
+
+class TestDelete:
+    async def test_success(self, async_db, sm):
+        await sm.get_or_create("s1")
+        assert await sm.delete("s1") is True
+        assert await sm.get("s1") is None
+
+    async def test_nonexistent(self, async_db, sm):
+        assert await sm.delete("nope") is False
+
+    async def test_deletes_messages(self, async_db, sm):
+        await sm.get_or_create("s1")
+        await sm.add_message("s1", "user", "hello")
+        await sm.delete("s1")
+        msgs = await sm.get_messages("s1")
+        assert msgs == []
+
+
+class TestAddMessage:
+    async def test_basic(self, async_db, sm):
+        await sm.get_or_create("s1")
+        msg = await sm.add_message("s1", "user", "hello")
+        assert msg.role == "user"
+        assert msg.content == "hello"
+        assert msg.session_id == "s1"
+
+    async def test_with_metadata(self, async_db, sm):
+        await sm.get_or_create("s1")
+        msg = await sm.add_message(
+            "s1", "step", "called tool", step_number=1, tool_used="web_search"
+        )
+        assert msg.step_number == 1
+        assert msg.tool_used == "web_search"
+
+
+class TestGetHistoryText:
+    async def test_empty(self, async_db, sm):
+        await sm.get_or_create("s1")
+        assert await sm.get_history_text("s1") == ""
+
+    async def test_formatted(self, async_db, sm):
+        await sm.get_or_create("s1")
+        await sm.add_message("s1", "user", "Hello")
+        await sm.add_message("s1", "assistant", "Hi!")
+        text = await sm.get_history_text("s1")
+        assert "User: Hello" in text
+        assert "Assistant: Hi!" in text
+
+    async def test_excludes_step_messages(self, async_db, sm):
+        await sm.get_or_create("s1")
+        await sm.add_message("s1", "user", "Hello")
+        await sm.add_message("s1", "step", "Thinking...")
+        await sm.add_message("s1", "assistant", "Hi!")
+        text = await sm.get_history_text("s1")
+        assert "Thinking..." not in text
+
+
+class TestGetMessages:
+    async def test_pagination(self, async_db, sm):
+        await sm.get_or_create("s1")
+        for i in range(5):
+            await sm.add_message("s1", "user", f"msg-{i}")
+        page = await sm.get_messages("s1", limit=2, offset=1)
+        assert len(page) == 2
+        assert page[0]["content"] == "msg-1"
+
+
+class TestListSessions:
+    async def test_empty(self, async_db, sm):
+        result = await sm.list_sessions()
+        assert result == []
+
+    async def test_with_sessions(self, async_db, sm):
+        await sm.get_or_create("a")
+        await sm.get_or_create("b")
+        result = await sm.list_sessions()
+        assert len(result) == 2
+        ids = {s["id"] for s in result}
+        assert ids == {"a", "b"}
+
+    async def test_includes_last_message(self, async_db, sm):
+        await sm.get_or_create("s1")
+        await sm.add_message("s1", "user", "Hello world")
+        result = await sm.list_sessions()
+        assert result[0]["last_message"] == "Hello world"
+
+
+class TestUpdateTitle:
+    async def test_success(self, async_db, sm):
+        await sm.get_or_create("s1")
+        assert await sm.update_title("s1", "My Chat") is True
+
+    async def test_nonexistent(self, async_db, sm):
+        assert await sm.update_title("nope", "title") is False
+
+
+class TestCountMessages:
+    async def test_counts_user_and_assistant(self, async_db, sm):
+        await sm.get_or_create("s1")
+        await sm.add_message("s1", "user", "hi")
+        await sm.add_message("s1", "assistant", "hello")
+        await sm.add_message("s1", "step", "thinking")
+        assert await sm.count_messages("s1") == 2
+
+
+class TestGenerateTitle:
+    async def test_generates_title(self, async_db, sm):
+        await sm.get_or_create("s1")
+        await sm.add_message("s1", "user", "Tell me about AI")
+        await sm.add_message("s1", "assistant", "AI is fascinating")
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "AI Discussion"
+
+        with patch("litellm.completion", return_value=mock_response):
+            title = await sm.generate_title("s1")
+
+        assert title == "AI Discussion"
+
+    async def test_skips_non_default_title(self, async_db, sm):
+        s = await sm.get_or_create("s1")
+        await sm.update_title("s1", "Custom Title")
+        # Need to re-fetch since generate_title reads from DB
+        title = await sm.generate_title("s1")
+        assert title == "Custom Title"

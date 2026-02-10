@@ -4,14 +4,16 @@ from src.agent.factory import create_agent, get_model, get_tools
 
 
 class TestAgentFactory:
-    def test_get_tools_returns_list(self):
+    @patch("src.agent.factory.mcp_manager")
+    def test_get_tools_returns_list(self, mock_mcp):
+        mock_mcp.get_tools.return_value = []
         tools = get_tools()
-        assert len(tools) == 4
+        assert isinstance(tools, list)
+        assert len(tools) >= 10
         tool_names = [t.name for t in tools]
-        assert "read_file" in tool_names
-        assert "write_file" in tool_names
-        assert "web_search" in tool_names
-        assert "fill_template" in tool_names
+        for expected in ["read_file", "write_file", "web_search", "fill_template",
+                         "view_soul", "update_soul", "create_goal", "shell_execute"]:
+            assert expected in tool_names
 
     @patch("src.agent.factory.LiteLLMModel")
     def test_get_model(self, mock_litellm_cls):
@@ -38,5 +40,5 @@ class TestAgentFactory:
 
         create_agent(additional_context="User: Hello\nAssistant: Hi!")
         call_kwargs = mock_agent_cls.call_args[1]
-        assert "Conversation history" in call_kwargs["system_prompt"]
-        assert "User: Hello" in call_kwargs["system_prompt"]
+        assert "CONVERSATION HISTORY" in call_kwargs["instructions"]
+        assert "User: Hello" in call_kwargs["instructions"]
