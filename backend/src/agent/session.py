@@ -56,29 +56,34 @@ class SessionManager:
 
     async def list_sessions(self) -> list[dict]:
         async with get_session() as db:
-            result = await db.execute(
-                select(Session).order_by(col(Session.updated_at).desc())
-            )
-            sessions = result.scalars().all()
-            out = []
-            for s in sessions:
-                # Get last message preview
-                msg_result = await db.execute(
-                    select(Message)
-                    .where(Message.session_id == s.id)
-                    .order_by(col(Message.created_at).desc())
-                    .limit(1)
-                )
-                last_msg = msg_result.scalars().first()
-                out.append({
-                    "id": s.id,
-                    "title": s.title,
-                    "created_at": s.created_at.isoformat(),
-                    "updated_at": s.updated_at.isoformat(),
-                    "last_message": last_msg.content[:100] if last_msg else None,
-                    "last_message_role": last_msg.role if last_msg else None,
-                })
-            return out
+            # Single query: fetch sessions with their latest message using window function
+            from sqlalchemy import text
+            rows = (await db.execute(text(
+                """
+                SELECT
+                    s.id, s.title, s.created_at, s.updated_at,
+                    lm.content AS last_content, lm.role AS last_role
+                FROM sessions s
+                LEFT JOIN (
+                    SELECT session_id, content, role,
+                           ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY created_at DESC) AS rn
+                    FROM messages
+                ) lm ON lm.session_id = s.id AND lm.rn = 1
+                ORDER BY s.updated_at DESC
+                """
+            ))).all()
+
+            return [
+                {
+                    "id": r.id,
+                    "title": r.title,
+                    "created_at": r.created_at if isinstance(r.created_at, str) else r.created_at.isoformat(),
+                    "updated_at": r.updated_at if isinstance(r.updated_at, str) else r.updated_at.isoformat(),
+                    "last_message": r.last_content[:100] if r.last_content else None,
+                    "last_message_role": r.last_role,
+                }
+                for r in rows
+            ]
 
     async def update_title(self, session_id: str, title: str) -> bool:
         async with get_session() as db:
@@ -100,6 +105,9 @@ class SessionManager:
         tool_used: str | None = None,
         metadata_json: str | None = None,
     ) -> Message:
+        # Truncate oversized content (50 KB)
+        if len(content) > 50_000:
+            content = content[:50_000] + "\n\n[truncated]"
         async with get_session() as db:
             msg = Message(
                 session_id=session_id,
@@ -143,6 +151,7 @@ class SessionManager:
     async def get_messages(
         self, session_id: str, limit: int = 100, offset: int = 0
     ) -> list[dict]:
+        limit = min(max(limit, 1), 1000)
         async with get_session() as db:
             result = await db.execute(
                 select(Message)

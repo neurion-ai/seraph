@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -6,6 +7,8 @@ from sqlmodel import select, col
 
 from src.db.engine import get_session
 from src.db.models import Goal, GoalLevel, GoalDomain, GoalStatus
+
+logger = logging.getLogger(__name__)
 
 _VALID_LEVELS = {e.value for e in GoalLevel}
 _VALID_DOMAINS = {e.value for e in GoalDomain}
@@ -167,6 +170,11 @@ class GoalRepository:
             if g.parent_id and g.parent_id in goal_map:
                 goal_map[g.parent_id]["children"].append(node)
             else:
+                if g.parent_id:
+                    logger.warning(
+                        "Orphan goal %s: parent %s not found, treating as root",
+                        g.id, g.parent_id,
+                    )
                 roots.append(node)
 
         return roots

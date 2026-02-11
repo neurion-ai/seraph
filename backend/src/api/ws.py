@@ -193,7 +193,8 @@ async def websocket_chat(websocket: WebSocket):
             if final_result:
                 try:
                     from src.memory.consolidator import consolidate_session
-                    asyncio.create_task(consolidate_session(session.id))
+                    from src.utils.background import track_task
+                    track_task(consolidate_session(session.id), name=f"consolidate-{session.id[:8]}")
                 except ImportError:
                     pass
 

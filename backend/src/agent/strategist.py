@@ -116,7 +116,7 @@ def parse_strategist_response(raw: str) -> StrategistDecision:
             reasoning=str(data.get("reasoning", "")),
         )
     except (json.JSONDecodeError, ValueError, TypeError) as e:
-        logger.warning("Failed to parse strategist response: %s", e)
+        logger.warning("Failed to parse strategist response: %s\nRaw: %.500s", e, raw)
         return StrategistDecision(
             should_intervene=False,
             content="",
