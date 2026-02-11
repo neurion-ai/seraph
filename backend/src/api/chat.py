@@ -56,7 +56,8 @@ async def chat(request: ChatRequest):
     if response_text:
         try:
             from src.memory.consolidator import consolidate_session
-            asyncio.create_task(consolidate_session(session.id))
+            from src.utils.background import track_task
+            track_task(consolidate_session(session.id), name=f"consolidate-{session.id[:8]}")
         except ImportError:
             pass
 

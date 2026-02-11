@@ -37,23 +37,30 @@ class InsightQueue:
         return insight
 
     async def drain(self) -> list[QueuedInsight]:
-        """Return all non-expired items ordered by urgency desc, then delete them + expired."""
+        """Return all non-expired items ordered by urgency desc, then delete all rows atomically."""
         cutoff = datetime.now(timezone.utc) - timedelta(hours=EXPIRY_HOURS)
         async with get_session() as db:
-            # Fetch non-expired, ordered by urgency desc
-            result = await db.execute(
-                select(QueuedInsight)
-                .where(QueuedInsight.created_at > cutoff)
-                .order_by(QueuedInsight.urgency.desc())
-            )
-            items = list(result.scalars().all())
+            # Single fetch of ALL rows, partition in Python, delete in same transaction
+            result = await db.execute(select(QueuedInsight))
+            all_rows = list(result.scalars().all())
 
-            # Delete all rows (both fetched and expired)
-            all_result = await db.execute(select(QueuedInsight))
-            for row in all_result.scalars().all():
+            def _is_fresh(row: QueuedInsight) -> bool:
+                ts = row.created_at
+                # SQLite may strip timezone info; make comparison safe
+                if ts.tzinfo is None:
+                    return ts > cutoff.replace(tzinfo=None)
+                return ts > cutoff
+
+            items = sorted(
+                [r for r in all_rows if _is_fresh(r)],
+                key=lambda r: r.urgency,
+                reverse=True,
+            )
+
+            for row in all_rows:
                 await db.delete(row)
 
-        logger.info("Drained %d insight(s) from queue", len(items))
+        logger.info("Drained %d insight(s) from queue (%d expired)", len(items), len(all_rows) - len(items))
         return items
 
     async def count(self) -> int:

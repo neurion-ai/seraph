@@ -55,22 +55,41 @@ def add_memory(
     category: str = "fact",
     source_session_id: str = "",
 ) -> str:
-    """Embed text and store as a memory. Returns the memory ID."""
-    table = _get_or_create_table()
-    vector = embed(text)
-    memory_id = uuid.uuid4().hex
+    """Embed text and store as a memory. Returns the memory ID or empty string on failure."""
+    try:
+        table = _get_or_create_table()
+        vector = embed(text)
 
-    table.add([{
-        "id": memory_id,
-        "text": text,
-        "category": category,
-        "source_session_id": source_session_id,
-        "vector": vector,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }])
+        # Dedup: skip if a very similar memory already exists
+        try:
+            if table.count_rows() > 0:
+                results = table.search(vector).limit(1).to_list()
+                if results and results[0].get("_distance", 1.0) < 0.05:
+                    logger.info(
+                        "Skipping duplicate memory (distance=%.4f, existing=%s)",
+                        results[0]["_distance"],
+                        results[0]["id"][:8],
+                    )
+                    return results[0]["id"]
+        except Exception:
+            logger.debug("Dedup check failed, proceeding with insert", exc_info=True)
 
-    logger.info("Added memory %s (category=%s)", memory_id[:8], category)
-    return memory_id
+        memory_id = uuid.uuid4().hex
+
+        table.add([{
+            "id": memory_id,
+            "text": text,
+            "category": category,
+            "source_session_id": source_session_id,
+            "vector": vector,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }])
+
+        logger.info("Added memory %s (category=%s)", memory_id[:8], category)
+        return memory_id
+    except Exception:
+        logger.exception("Failed to add memory")
+        return ""
 
 
 def search(
@@ -81,38 +100,43 @@ def search(
     """Search memories by semantic similarity.
 
     Returns list of dicts with: id, text, category, score, created_at.
+    Returns [] on any failure.
     """
-    if top_k <= 0:
-        top_k = settings.memory_search_top_k
+    try:
+        if top_k <= 0:
+            top_k = settings.memory_search_top_k
 
-    table = _get_or_create_table()
+        table = _get_or_create_table()
 
-    if table.count_rows() == 0:
-        return []
-
-    query_vector = embed(query)
-
-    results = table.search(query_vector).limit(top_k)
-
-    if category_filter:
-        # Use parameterized filter to prevent injection
-        allowed_categories = {"fact", "preference", "pattern", "goal", "reflection"}
-        if category_filter not in allowed_categories:
+        if table.count_rows() == 0:
             return []
-        results = results.where(f"category = '{category_filter}'")
 
-    rows = results.to_list()
+        query_vector = embed(query)
 
-    return [
-        {
-            "id": r["id"],
-            "text": r["text"],
-            "category": r["category"],
-            "score": r.get("_distance", 0.0),
-            "created_at": r["created_at"],
-        }
-        for r in rows
-    ]
+        results = table.search(query_vector).limit(top_k)
+
+        if category_filter:
+            # Use parameterized filter to prevent injection
+            allowed_categories = {"fact", "preference", "pattern", "goal", "reflection"}
+            if category_filter not in allowed_categories:
+                return []
+            results = results.where(f"category = '{category_filter}'")
+
+        rows = results.to_list()
+
+        return [
+            {
+                "id": r["id"],
+                "text": r["text"],
+                "category": r["category"],
+                "score": r.get("_distance", 0.0),
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
+    except Exception:
+        logger.exception("Failed to search memories")
+        return []
 
 
 def search_formatted(
@@ -120,11 +144,18 @@ def search_formatted(
     top_k: int = 0,
     category_filter: Optional[str] = None,
 ) -> str:
-    """Search memories and return a formatted string for agent context."""
-    results = search(query, top_k, category_filter)
-    if not results:
+    """Search memories and return a formatted string for agent context.
+
+    Returns "" on any failure.
+    """
+    try:
+        results = search(query, top_k, category_filter)
+        if not results:
+            return ""
+        lines = []
+        for r in results:
+            lines.append(f"- [{r['category']}] {r['text']}")
+        return "\n".join(lines)
+    except Exception:
+        logger.exception("Failed to format memory search results")
         return ""
-    lines = []
-    for r in results:
-        lines.append(f"- [{r['category']}] {r['text']}")
-    return "\n".join(lines)

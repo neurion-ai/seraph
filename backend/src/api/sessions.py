@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from src.agent.session import session_manager
@@ -22,7 +22,9 @@ async def list_sessions():
 
 @router.get("/sessions/{session_id}/messages")
 async def get_session_messages(
-    session_id: str, limit: int = 100, offset: int = 0
+    session_id: str,
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
 ):
     """Get paginated message history for a session."""
     session = await session_manager.get(session_id)

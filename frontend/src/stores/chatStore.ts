@@ -50,6 +50,7 @@ interface ChatStore {
 }
 
 const LAST_SESSION_KEY = "seraph_last_session_id";
+const MAX_MESSAGES = 500;
 
 const defaultVisual: AgentVisualState = {
   animationState: "idle",
@@ -74,9 +75,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   onboardingCompleted: null,
 
   addMessage: (message) =>
-    set((state) => ({ messages: [...state.messages, message] })),
+    set((state) => {
+      const updated = [...state.messages, message];
+      return { messages: updated.length > MAX_MESSAGES ? updated.slice(-MAX_MESSAGES) : updated };
+    }),
 
-  setMessages: (messages) => set({ messages }),
+  setMessages: (messages) =>
+    set({ messages: messages.length > MAX_MESSAGES ? messages.slice(-MAX_MESSAGES) : messages }),
 
   setSessionId: (id) => {
     localStorage.setItem(LAST_SESSION_KEY, id);
