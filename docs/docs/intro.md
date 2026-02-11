@@ -90,8 +90,8 @@ See [Testing Guide](./development/testing) for full details.
 
 ## Current Status
 
-- **Phase 0** (Foundation): Complete
+- **Phase 0** (Foundation): Complete — chat, WebSocket streaming, Phaser village, day/night cycle
 - **Phase 1** (Persistent Identity): Complete — DB, soul/memory, goals, onboarding, quest UI, two-pane chat sidebar, session auto-naming, sprite tooltips, chat maximize/close controls, HUD panel buttons, session persistence (localStorage)
-- **Phase 2** (Capable Executor): Complete — shell, browser, calendar, email, plugin system
-- **Phase 3** (The Observer): Planned — scheduler, context awareness, proactive reasoning
+- **Phase 2** (Capable Executor): Complete — shell, browser, calendar, email, plugin system, MCP integrations (Things3)
+- **Phase 3** (The Observer): Complete (3.1–3.5) — background scheduler, context awareness, user state machine, proactive strategist, daily briefing, evening review, attention guardian, insight queue, ambient/nudge frontend, native macOS screen daemon
 - **Phase 4** (The Network): Planned — SKILL.md ecosystem, multi-channel messaging, workflows, multi-agent, voice, canvas, remote access

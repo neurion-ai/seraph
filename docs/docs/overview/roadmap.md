@@ -8,11 +8,11 @@ sidebar_position: 2
 
 ---
 
-## Phase 0 — Foundation (Current State)
+## Phase 0 — Foundation
 
 **Status**: Complete
 
-What exists today:
+What was built:
 - Chat interface with WebSocket streaming
 - 4 tools (web search, file read/write, template fill)
 - Animated RPG avatar in Phaser 3 village scene
@@ -105,7 +105,7 @@ Seraph can search the web, run code, manage your calendar, handle email, take no
 
 **Theme**: Seraph watches (with consent) and understands what the human is doing.
 
-**Status**: Core infrastructure implemented (Phases 3.1–3.4). Background scheduler, context awareness, user state machine, strategist agent, daily briefing, evening review, and frontend ambient/nudge feedback are operational. Screen capture daemon, pattern detection, state inference, and avatar state reflection remain planned.
+**Status**: Complete (Phases 3.1–3.5). Background scheduler, context awareness, user state machine, strategist agent, daily briefing, evening review, frontend ambient/nudge feedback, and native macOS screen daemon are all operational. Pattern detection, behavioral state inference, and avatar state reflection remain planned for future iterations.
 
 ### 3.1 Context Awareness Layer ✅
 - **Active application detection** — What app/site is the user on? *(API contract documented, daemon deferred)*
