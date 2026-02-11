@@ -26,7 +26,7 @@ For future screenshot understanding (Level 2):
 |-------|--------|--------------------:|-----------------|-------|
 | FastVLM 0.5B | 500M | ~1-2 GB | ~0.5s/frame | Apple's own model, MLX-native, optimized for Apple Silicon |
 | Moondream 0.5B | 500M | ~1-2 GB | ~1s/frame | Strong on UI understanding, good at describing screen content |
-| SmolVLM2 500M | 500M | <1 GB | ~0.8s/frame | HuggingFace, smallest footprint |
+| SmolVLM2 500M | 500M | &lt;1 GB | ~0.8s/frame | HuggingFace, smallest footprint |
 | Qwen2-VL 2B | 2B | ~3-4 GB | ~2s/frame | More capable but heavier |
 
 **Recommendation:** FastVLM 0.5B or Moondream 0.5B. Both fit comfortably in memory alongside other apps and process a frame in under 1 second on Apple Silicon.
