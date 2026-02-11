@@ -7,6 +7,15 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+# Apps that indicate focused/deep work when in the foreground
+_DEEP_WORK_APPS = (
+    "vs code", "visual studio code", "code",
+    "xcode", "intellij", "pycharm", "webstorm", "goland", "rider",
+    "neovim", "vim", "emacs",
+    "terminal", "iterm", "warp", "alacritty",
+    "cursor",
+)
+
 
 # ─── Enums ────────────────────────────────────────────────
 
@@ -69,6 +78,12 @@ class UserStateMachine:
         # 2. In meeting
         if current_event:
             return UserState.in_meeting
+
+        # 2.5 Active window — IDE/terminal detected → deep work (if no calendar event)
+        if active_window and not current_event:
+            app_lower = active_window.lower()
+            if any(ide in app_lower for ide in _DEEP_WORK_APPS):
+                return UserState.deep_work
 
         # 3. Transition detection — previous state was blocked, now cleared
         if previous_state in {s.value for s in _BLOCKED_STATES} and not current_event:
