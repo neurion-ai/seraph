@@ -156,6 +156,50 @@ class TestDeriveState:
         )
         assert state == UserState.available
 
+    def test_ide_window_triggers_deep_work(self, sm):
+        state = sm.derive_state(
+            current_event=None,
+            previous_state="available",
+            time_of_day="morning",
+            is_working_hours=True,
+            last_interaction=datetime.now(timezone.utc),
+            active_window="VS Code — main.py",
+        )
+        assert state == UserState.deep_work
+
+    def test_terminal_triggers_deep_work(self, sm):
+        state = sm.derive_state(
+            current_event=None,
+            previous_state="available",
+            time_of_day="morning",
+            is_working_hours=True,
+            last_interaction=datetime.now(timezone.utc),
+            active_window="iTerm2 — ~/projects",
+        )
+        assert state == UserState.deep_work
+
+    def test_calendar_overrides_ide(self, sm):
+        state = sm.derive_state(
+            current_event="Standup",
+            previous_state="available",
+            time_of_day="morning",
+            is_working_hours=True,
+            last_interaction=datetime.now(timezone.utc),
+            active_window="VS Code — main.py",
+        )
+        assert state == UserState.in_meeting
+
+    def test_non_ide_window_stays_available(self, sm):
+        state = sm.derive_state(
+            current_event=None,
+            previous_state="available",
+            time_of_day="morning",
+            is_working_hours=True,
+            last_interaction=datetime.now(timezone.utc),
+            active_window="Chrome — YouTube",
+        )
+        assert state == UserState.available
+
     def test_focus_keyword_case_insensitive(self, sm):
         state = sm.derive_state(
             current_event="DEEP WORK session",

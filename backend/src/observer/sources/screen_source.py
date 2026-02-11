@@ -46,7 +46,13 @@ The data is then included in the next context refresh and available to the
 strategist agent and delivery gate for state derivation.
 
 ## Implementation Status
-The daemon is deferred to a future phase. The backend endpoint and
-ContextManager.update_screen_context() method are already implemented and
-ready to receive data when the daemon is built.
+The native macOS daemon is implemented in ``daemon/seraph_daemon.py``.
+It captures app name + window title (Level 0) and posts to the backend
+endpoint.  See ``daemon/README.md`` for setup, permissions, and usage.
+
+The backend endpoint and ContextManager.update_screen_context() method are
+implemented in ``src/api/observer.py`` and ``src/observer/manager.py``.
+
+For research on future upgrades (OCR, VLMs, cloud APIs), see
+``docs/docs/development/screen-daemon-research.md``.
 """
