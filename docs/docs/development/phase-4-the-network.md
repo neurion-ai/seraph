@@ -249,9 +249,9 @@ MODEL_PROFILES = {
 
 ---
 
-## 4.6 Enhanced Security, MCP Security Layer & Sandboxing
+## 4.6 Enhanced Sandboxing
 
-Move beyond snekbox to granular tool-level permissions, Docker-based isolation, and secure MCP server integration. Incorporates research from IronClaw (OAuth 2.1 + DCR + credential injection + leak detection + WASM sandbox).
+Move beyond snekbox to granular tool-level permissions and Docker-based isolation.
 
 **Files**:
 ```
@@ -260,9 +260,6 @@ backend/src/security/
   permissions.py         # Tool allow/deny policies
   sandbox.py             # Docker sandbox manager
   audit.py               # Security audit logging
-  credentials.py         # Encrypted credential storage + injection
-  leak_detector.py       # Aho-Corasick pattern scanner for tool outputs
-  oauth.py               # OAuth 2.1 + PKCE + Dynamic Client Registration
 ```
 
 **Tool permissions**:
@@ -285,27 +282,6 @@ backend/src/security/
 - Flag suspicious patterns (rapid file writes, network access attempts)
 - `GET /api/security/audit` — review recent tool usage
 - Redaction of sensitive values in logs (API keys, passwords)
-
-### 4.6.1 Credential Injection at Boundaries
-- MCP tools never see raw credentials
-- Inject auth headers at the transport layer (MCPManager intercepts outbound requests)
-- Credentials stored encrypted in DB (AES-256-GCM), master key in macOS Keychain
-- Pattern: tool declares host needs → MCPManager maps host → injects Bearer/API-key header
-
-### 4.6.2 Leak Detection on Tool Outputs
-- Aho-Corasick multi-pattern scanner on all tool responses before they enter LLM context
-- Default patterns: OpenAI keys, Anthropic keys, AWS keys, GitHub tokens, PEM keys, high-entropy hex strings
-- Actions: Block (reject), Redact (replace with `[REDACTED]`), Warn (log)
-
-### 4.6.3 OAuth 2.1 + Dynamic Client Registration for Hosted MCP
-- Support hosted MCP servers (e.g., `api.githubcopilot.com/mcp/`) with full OAuth 2.1 + PKCE flow
-- Dynamic Client Registration: discover `/.well-known/oauth-protected-resource`, register Seraph as public client
-- Token refresh, encrypted token storage, localhost callback listener
-
-### 4.6.4 Capability-Based Tool Permissions
-- Per-MCP-server capability declarations in config: `allowed_hosts`, `allowed_paths`, `can_write`, `can_network`
-- Default = read-only, no network egress
-- UI: permission review before activating a new MCP server
 
 **DM access control** (for multi-channel, 4.2):
 - **Pairing**: Unknown senders receive a one-time code
@@ -471,7 +447,7 @@ backend/src/remote/
 1. **SKILL.md ecosystem** (4.1) — low effort, high leverage, multiplies all other features
 2. **Multi-model failover** (4.5) — quick win, improves reliability immediately
 3. **Webhook triggers** (4.7) — event-driven complements Phase 3's scheduler
-4. **Enhanced security** (4.6) — prerequisite for multi-channel and remote access
+4. **Enhanced sandboxing** (4.6) — prerequisite for multi-channel and remote access
 5. **Telegram channel** (4.2, first channel) — Seraph escapes the browser
 6. **Workflow engine** (4.3) — composable automations, builds on skills
 7. **Voice interface Phase A** (4.8) — browser Speech API, zero cost
@@ -487,6 +463,7 @@ backend/src/remote/
 - [ ] Model failover triggers when primary model returns error
 - [ ] GitHub webhook triggers agent notification
 - [ ] Tool permissions block shell_execute for restricted agent
+- [ ] MCP servers configurable via `mcp-servers.json`, Settings UI, and `mcp.sh` CLI
 - [ ] Telegram bot responds to messages with full agent capabilities
 - [ ] Workflow with 3+ steps executes end-to-end with step chaining
 - [ ] Voice transcription sends text to agent, response appears in chat
