@@ -81,14 +81,17 @@ class TestOnboardingEdgeCases:
         """Multiple messages during onboarding should all get responses."""
         client, patches, stack = _make_sync_client_with_db()
         try:
-            def _make_agent():
+            def _make_build_result(*args, **kwargs):
                 agent = MagicMock()
                 agent.run.return_value = iter([
                     FinalAnswerStep(output="Onboarding response"),
                 ])
-                return agent
+                return (agent, True)
 
-            with patch("src.api.ws.create_onboarding_agent", side_effect=_make_agent), \
+            # Patch _build_agent directly (not create_onboarding_agent) to avoid
+            # async DB queries inside _build_agent that race with the sync
+            # TestClient thread on CI.
+            with patch("src.api.ws._build_agent", side_effect=_make_build_result), \
                  patch("src.memory.consolidator.consolidate_session"):
                 with client.websocket_connect("/ws/chat") as ws:
                     _ = ws.receive_text()  # welcome
