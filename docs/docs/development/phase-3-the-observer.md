@@ -6,7 +6,7 @@ sidebar_position: 3
 
 **Goal**: Seraph understands what you're doing and starts thinking proactively.
 
-**Status**: Phases 3.1–3.4 implemented
+**Status**: Phases 3.1–3.5 implemented
 
 ---
 
@@ -153,50 +153,50 @@ class CurrentContext:
 
 ---
 
-## 3.4 Native macOS Screen Capture Daemon
+## 3.4 Native macOS Screen Daemon
 
-**Status**: Deferred — API contract documented in `backend/src/observer/sources/screen_source.py`, backend endpoint and `ContextManager.update_screen_context()` are implemented and ready. Daemon implementation is a future phase.
+**Status**: Implemented (Phase 3.5) — Level 0: app name + window title
 
-**Separate project / directory**: `daemon/` at repo root (not yet created)
+**Directory**: `daemon/` at repo root
 
-**Stack**: Python (familiar, debuggable) with PyObjC for macOS APIs
+**Stack**: Python 3.12 + PyObjC + httpx
 
-**Files** (planned):
+**Files**:
 ```
 daemon/
-  seraph_daemon.py               # Main entry point
-  capture/
-    __init__.py
-    window_tracker.py            # Active window name + title via NSWorkspace
-    screen_capture.py            # Screenshot + OCR via Vision framework
-    activity_monitor.py          # Idle detection (mouse/keyboard activity)
-  config.py                      # Backend URL, capture interval, privacy settings
-  requirements.txt               # pyobjc-framework-Cocoa, pyobjc-framework-Vision, httpx
-  install.sh                     # Install as launchd service
-  uninstall.sh                   # Remove launchd service
+  seraph_daemon.py               # Main entry point — polling daemon
+  requirements.txt               # pyobjc-framework-Cocoa, pyobjc-framework-Quartz, httpx
+  run.sh                         # Quick start script (creates venv, installs deps, runs)
+  README.md                      # Setup, permissions, usage, troubleshooting
 ```
 
-**Capabilities**:
-- **Active window tracking**: App name + window title via `NSWorkspace.sharedWorkspace().frontmostApplication` — lightweight, no screen capture needed
-- **Screen OCR** (opt-in): Capture screen region via `CGWindowListCreateImage`, run through macOS Vision framework for text extraction. Local only — no cloud API.
-- **Idle detection**: Track time since last mouse/keyboard event via `CGEventSourceSecondsSinceLastEventType`
-- **Activity patterns**: Log app switches to detect focus vs. distraction patterns over time
+**Capabilities (Level 0 — current)**:
+- **Active window tracking**: App name via `NSWorkspace.sharedWorkspace().frontmostApplication` (no permission) + window title via AppleScript (Accessibility permission)
+- **Idle detection**: Seconds since last input via `Quartz.CGEventSourceSecondsSinceLastEventType` (no permission)
+- **Change detection**: Skips POST if `active_window` unchanged since last POST
+- **Idle gating**: Skips POST if user idle for `--idle-timeout` seconds (default 300)
+
+**IDE-based deep work detection** (`backend/src/observer/user_state.py`):
+- `_DEEP_WORK_APPS` tuple matches IDE/terminal app names (VS Code, Xcode, IntelliJ, iTerm, etc.)
+- When `active_window` matches an IDE and no calendar event is active, user state becomes `deep_work`
+- Calendar events always take priority (meeting overrides IDE)
 
 **Communication**:
-- Sends context to Docker backend via HTTP POST to `http://localhost:8004/api/observer/context`
-- Configurable interval: default every 30 seconds for window tracking, every 5 min for screen OCR
-- Backend stores latest context in memory (not DB — ephemeral)
+- POST to `http://localhost:8004/api/observer/context` with `{"active_window": "App — Title", "screen_context": null}`
+- CLI args: `--url`, `--interval` (default 5s), `--idle-timeout` (default 300s), `--verbose`
+- Graceful shutdown on SIGINT/SIGTERM, handles backend-down with warning + retry
 
 **Privacy**:
-- All processing local (macOS Vision framework for OCR)
-- Screen content never sent to cloud — only summarized text sent to local Docker backend
-- User can disable screen capture entirely (window tracking only)
-- User can exclude specific apps from tracking (e.g., 1Password, banking)
-- Clear data: daemon stores nothing persistently, backend context is ephemeral
+- Only captures app name + window title — no screenshots, keystrokes, or screen content
+- Requires only Accessibility permission (one-time grant, no monthly nag)
+- All data stays local (daemon posts to localhost backend only)
 
-**New API endpoint**: `POST /api/observer/context` — receives context updates from daemon
+**Future upgrade path** (see [Screen Daemon Research](./screen-daemon-research)):
+- Level 1: + OCR text extraction (requires Screen Recording permission)
+- Level 2: + Local VLM descriptions (FastVLM/Moondream, ~1GB RAM)
+- Level 3: + Cloud VLM on-demand (Gemini Flash-Lite ~$0.09/mo at 1/5min)
 
-**Installation**: `launchd` plist for auto-start on login, or manual run. Install/uninstall scripts provided.
+**Quick start**: `./daemon/run.sh --verbose`
 
 ---
 
@@ -402,8 +402,8 @@ Queued insights I held back today: 0
 4. ~~**Proactive reasoning engine + strategist agent + insight queue**~~ ✅ Phase 3.4
 5. ~~**Morning briefing + evening review** (scheduled LiteLLM jobs)~~ ✅ Phase 3.4
 6. ~~**Frontend ambient indicator + nudge speech bubble**~~ ✅ Phase 3.4
-7. **Avatar state reflection** (ambient Phaser animations) — visual polish
-8. **Native macOS daemon** (window tracking, screen OCR) — OS-level observation
+7. ~~**Native macOS daemon** (window tracking + IDE deep work detection)~~ ✅ Phase 3.5
+8. **Avatar state reflection** (ambient Phaser animations) — visual polish
 9. **Interruption mode UI** (frontend toggle, suggestions) — user control
 
 ---
@@ -424,7 +424,8 @@ Queued insights I held back today: 0
 - [x] Alert/advisory proactive messages open chat panel (Phase 3.4)
 - [ ] Avatar changes behavior when it has pending insights
 - [ ] Click Seraph in `has_insight` state → chat opens with queued insights
-- [ ] Native daemon sends active window info to backend
+- [x] Native daemon sends active window info to backend (Phase 3.5)
+- [x] IDE/terminal detection triggers deep_work user state (Phase 3.5)
 - [ ] Screen OCR works locally via macOS Vision framework
 - [ ] Mode switcher works (Focus / Balanced / Active)
 - [ ] Seraph suggests mode changes based on calendar
