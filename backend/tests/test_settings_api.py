@@ -2,13 +2,18 @@
 
 import pytest
 import pytest_asyncio
+from unittest.mock import patch
 
 from src.db.models import UserProfile
+from src.observer.context import CurrentContext
 
 
 @pytest.mark.asyncio
 async def test_get_interruption_mode(client):
-    resp = await client.get("/api/settings/interruption-mode")
+    # Reset context_manager to a fresh default so the test is time-independent
+    fresh = CurrentContext()
+    with patch("src.api.settings.context_manager.get_context", return_value=fresh):
+        resp = await client.get("/api/settings/interruption-mode")
     assert resp.status_code == 200
     data = resp.json()
     assert data["mode"] == "balanced"
