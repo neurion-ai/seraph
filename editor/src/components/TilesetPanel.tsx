@@ -297,7 +297,7 @@ function RecentStrip({
   return (
     <div className="border-b border-gray-700 px-1 py-1">
       <div className="text-[9px] text-gray-500 mb-0.5">Recent:</div>
-      <div className="flex gap-1 overflow-x-auto pb-0.5">
+      <div className="flex gap-1 overflow-x-auto p-0.5">
         {recentSelections.map((entry, i) => {
           const ts = tilesets[entry.tilesetIndex];
           if (!ts) return null;
