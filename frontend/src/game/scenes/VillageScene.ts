@@ -159,11 +159,12 @@ export class VillageScene extends Phaser.Scene {
     }
     this.tilesetsRef = tilesets;
 
-    // Create tile layers
+    // Create tile layers (handle sublayer names like "terrain__2")
     for (const layerData of map.layers) {
       const layer = map.createLayer(layerData.name, tilesets);
       if (layer) {
-        const depth = LAYER_DEPTHS[layerData.name] ?? 0;
+        const baseName = layerData.name.replace(/__\d+$/, "");
+        const depth = LAYER_DEPTHS[baseName] ?? 0;
         layer.setDepth(depth);
       }
     }
@@ -431,7 +432,7 @@ export class VillageScene extends Phaser.Scene {
       for (let col = 0; col < map.width; col++) {
         let walkable = true;
 
-        // Check all tile layers
+        // Check all tile layers (including sublayers like "terrain__2")
         for (const layerData of map.layers) {
           const tile = map.getTileAt(col, row, false, layerData.name);
           if (tile) {
@@ -441,9 +442,10 @@ export class VillageScene extends Phaser.Scene {
               walkable = false;
               break;
             }
-            // Buildings and treetops layers are blocked by default if tile exists
+            // Buildings and treetops layers (and their sublayers) are blocked by default if tile exists
+            const baseName = layerData.name.replace(/__\d+$/, "");
             if (
-              (layerData.name === "buildings" || layerData.name === "treetops") &&
+              (baseName === "buildings" || baseName === "treetops") &&
               tileWalkable === undefined
             ) {
               walkable = false;
@@ -654,20 +656,21 @@ export class VillageScene extends Phaser.Scene {
       ? JSON.parse(JSON.stringify((this.pathfinder as unknown as { grid: number[][] }).grid))
       : null;
 
-    // Hide exterior tiles within the zone (buildings, decorations, treetops layers)
+    // Hide exterior tiles within the zone (buildings, decorations, treetops layers + sublayers)
     this.hiddenExteriorTiles = [];
-    const hideLayers = ["buildings", "decorations", "treetops"];
-    for (const layerName of hideLayers) {
-      const layer = this.mapRef.getLayer(layerName);
-      if (!layer?.tilemapLayer) continue;
-      const tilemapLayer = layer.tilemapLayer;
+    const hideBaseLayers = ["buildings", "decorations", "treetops"];
+    for (const layerData of this.mapRef.layers) {
+      const baseName = layerData.name.replace(/__\d+$/, "");
+      if (!hideBaseLayers.includes(baseName)) continue;
+      if (!layerData.tilemapLayer) continue;
+      const tilemapLayer = layerData.tilemapLayer;
       const savedTiles: Array<{ col: number; row: number; origIndex: number }> = [];
 
       for (let r = 0; r < building.zoneH; r++) {
         for (let c = 0; c < building.zoneW; c++) {
           const col = building.zoneCol + c;
           const row = building.zoneRow + r;
-          const tile = this.mapRef.getTileAt(col, row, true, layerName);
+          const tile = this.mapRef.getTileAt(col, row, true, layerData.name);
           if (tile && tile.index >= 0) {
             savedTiles.push({ col, row, origIndex: tile.index });
             tilemapLayer.putTileAt(-1, col, row);

@@ -1,5 +1,4 @@
-import type { TiledTileLayer } from "../types/map";
-import type { LoadedTileset, AnimationLookup } from "../types/editor";
+import type { CellStack, LoadedTileset, AnimationLookup } from "../types/editor";
 import { resolveTileGid, getTileSourceRect } from "./tileset-loader";
 
 export interface Viewport {
@@ -17,7 +16,8 @@ export function renderMap(
   ctx: CanvasRenderingContext2D,
   canvasWidth: number,
   canvasHeight: number,
-  layers: TiledTileLayer[],
+  layers: CellStack[][],
+  layerNames: string[],
   tilesets: LoadedTileset[],
   mapWidth: number,
   mapHeight: number,
@@ -62,33 +62,39 @@ export function renderMap(
 
     for (let row = startRow; row < endRow; row++) {
       for (let col = startCol; col < endCol; col++) {
-        let gid = layer.data[row * mapWidth + col];
-        if (gid <= 0) continue;
+        const stack = layer[row * mapWidth + col];
+        if (!stack || stack.length === 0) continue;
 
-        // Resolve animated tile if applicable
-        if (showAnimations && animationLookup && timestamp !== undefined) {
-          const anim = animationLookup.get(gid);
-          if (anim && anim.frames.length > 0) {
-            const elapsed = timestamp % anim.totalDuration;
-            let accum = 0;
-            for (const frame of anim.frames) {
-              accum += frame.duration;
-              if (elapsed < accum) {
-                gid = frame.gid;
-                break;
+        // Draw all GIDs in the stack, bottom to top
+        for (let si = 0; si < stack.length; si++) {
+          let gid = stack[si];
+          if (gid <= 0) continue;
+
+          // Resolve animated tile if applicable
+          if (showAnimations && animationLookup && timestamp !== undefined) {
+            const anim = animationLookup.get(gid);
+            if (anim && anim.frames.length > 0) {
+              const elapsed = timestamp % anim.totalDuration;
+              let accum = 0;
+              for (const frame of anim.frames) {
+                accum += frame.duration;
+                if (elapsed < accum) {
+                  gid = frame.gid;
+                  break;
+                }
               }
             }
           }
+
+          const resolved = resolveTileGid(gid, tilesets);
+          if (!resolved) continue;
+
+          const { sx, sy, sw, sh } = getTileSourceRect(resolved.localId, resolved.tileset);
+          const dx = offsetX + col * scaledTile;
+          const dy = offsetY + row * scaledTile;
+
+          ctx.drawImage(resolved.tileset.image, sx, sy, sw, sh, dx, dy, scaledTile, scaledTile);
         }
-
-        const resolved = resolveTileGid(gid, tilesets);
-        if (!resolved) continue;
-
-        const { sx, sy, sw, sh } = getTileSourceRect(resolved.localId, resolved.tileset);
-        const dx = offsetX + col * scaledTile;
-        const dy = offsetY + row * scaledTile;
-
-        ctx.drawImage(resolved.tileset.image, sx, sy, sw, sh, dx, dy, scaledTile, scaledTile);
       }
     }
   }
@@ -139,20 +145,23 @@ export function renderMap(
   ctx.strokeRect(offsetX, offsetY, mapPixelW, mapPixelH);
 }
 
-/** Check if a tile position is walkable across all layers */
+/** Check if a tile position is walkable across all layers (checks ALL GIDs in stacks) */
 export function isTileWalkable(
   col: number,
   row: number,
-  layers: TiledTileLayer[],
+  layers: CellStack[][],
   mapWidth: number,
   tilesets: LoadedTileset[]
 ): boolean {
   for (const layer of layers) {
-    const gid = layer.data[row * mapWidth + col];
-    if (gid <= 0) continue;
-    const resolved = resolveTileGid(gid, tilesets);
-    if (resolved && !resolved.tileset.walkability[resolved.localId]) {
-      return false;
+    const stack = layer[row * mapWidth + col];
+    if (!stack) continue;
+    for (const gid of stack) {
+      if (gid <= 0) continue;
+      const resolved = resolveTileGid(gid, tilesets);
+      if (resolved && !resolved.tileset.walkability[resolved.localId]) {
+        return false;
+      }
     }
   }
   return true;

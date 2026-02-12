@@ -1,5 +1,5 @@
 import type { TiledMap, TiledTileLayer, TiledObjectLayer, TiledTilesetRef, TiledTileDef } from "../types/map";
-import type { LoadedTileset, MapObject, TileAnimationGroup, TileAnimationEntry, BuildingDef } from "../types/editor";
+import type { LoadedTileset, MapObject, TileAnimationGroup, TileAnimationEntry, BuildingDef, CellStack } from "../types/editor";
 
 const TILED_VERSION = "1.10.2";
 const MAP_VERSION = "1.10";
@@ -80,8 +80,38 @@ function tilesetImagePath(ts: LoadedTileset): string {
   return `../assets/${dir}/${ts.name}.png`;
 }
 
+/**
+ * Determine the max stack depth for a layer and split into sublayers.
+ * Returns flat number[] arrays for each sublayer (Tiled-compatible).
+ */
+function splitStacksIntoSublayers(
+  layer: CellStack[],
+  cellCount: number,
+): number[][] {
+  // Find max stack depth
+  let maxDepth = 0;
+  for (let i = 0; i < cellCount; i++) {
+    const stack = layer[i];
+    if (stack && stack.length > maxDepth) maxDepth = stack.length;
+  }
+  if (maxDepth === 0) return [new Array(cellCount).fill(0)];
+
+  const sublayers: number[][] = [];
+  for (let d = 0; d < maxDepth; d++) {
+    const flat = new Array(cellCount).fill(0);
+    for (let i = 0; i < cellCount; i++) {
+      const stack = layer[i];
+      if (stack && d < stack.length) {
+        flat[i] = stack[d];
+      }
+    }
+    sublayers.push(flat);
+  }
+  return sublayers;
+}
+
 export function serializeMap(
-  layers: number[][],
+  layers: CellStack[][],
   layerNames: string[],
   mapWidth: number,
   mapHeight: number,
@@ -91,21 +121,33 @@ export function serializeMap(
   animationGroups?: TileAnimationGroup[],
   buildings?: BuildingDef[],
 ): TiledMap {
-  const tileLayers: TiledTileLayer[] = layerNames.map((name, i) => ({
-    id: i + 1,
-    name,
-    type: "tilelayer",
-    width: mapWidth,
-    height: mapHeight,
-    x: 0,
-    y: 0,
-    data: [...layers[i]],
-    opacity: 1,
-    visible: true,
-  }));
+  const cellCount = mapWidth * mapHeight;
+  const tileLayers: TiledTileLayer[] = [];
+  let nextId = 1;
+
+  for (let li = 0; li < layerNames.length; li++) {
+    const baseName = layerNames[li];
+    const sublayerData = splitStacksIntoSublayers(layers[li], cellCount);
+
+    for (let si = 0; si < sublayerData.length; si++) {
+      const name = si === 0 ? baseName : `${baseName}__${si + 1}`;
+      tileLayers.push({
+        id: nextId++,
+        name,
+        type: "tilelayer",
+        width: mapWidth,
+        height: mapHeight,
+        x: 0,
+        y: 0,
+        data: sublayerData[si],
+        opacity: 1,
+        visible: true,
+      });
+    }
+  }
 
   const objectLayer: TiledObjectLayer = {
-    id: layerNames.length + 1,
+    id: nextId++,
     name: "objects",
     type: "objectgroup",
     x: 0,
@@ -259,8 +301,20 @@ export function saveMapToFile(map: TiledMap, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+/** Base layer names used in the editor */
+const BASE_LAYER_NAMES = ["ground", "terrain", "buildings", "decorations", "treetops"];
+
+/** Parse __N suffix from layer name. Returns [baseName, sublayerIndex (0-based)]. */
+function parseSublayerName(name: string): [string, number] {
+  const match = name.match(/^(.+)__(\d+)$/);
+  if (match) {
+    return [match[1], parseInt(match[2], 10) - 1]; // __2 → index 1, __3 → index 2
+  }
+  return [name, 0];
+}
+
 export function parseMapFromJson(json: string): {
-  layers: number[][];
+  layers: CellStack[][];
   objects: MapObject[];
   width: number;
   height: number;
@@ -269,13 +323,20 @@ export function parseMapFromJson(json: string): {
 } | null {
   try {
     const map: TiledMap = JSON.parse(json);
-    const layers: number[][] = [];
+    const cellCount = map.width * map.height;
+
+    // Collect tile layers grouped by base name
+    const sublayersByBase = new Map<string, Map<number, number[]>>();
     const objects: MapObject[] = [];
     const animationGroups: TileAnimationGroup[] = [];
 
     for (const layer of map.layers) {
       if (layer.type === "tilelayer") {
-        layers.push([...layer.data]);
+        const [baseName, subIdx] = parseSublayerName(layer.name);
+        if (!sublayersByBase.has(baseName)) {
+          sublayersByBase.set(baseName, new Map());
+        }
+        sublayersByBase.get(baseName)!.set(subIdx, [...layer.data]);
       } else if (layer.type === "objectgroup") {
         for (const obj of layer.objects) {
           if (obj.type === "spawn_point") {
@@ -304,6 +365,37 @@ export function parseMapFromJson(json: string): {
           }
         }
       }
+    }
+
+    // Merge sublayers into CellStack arrays, ordered by BASE_LAYER_NAMES
+    const layers: CellStack[][] = [];
+    for (const baseName of BASE_LAYER_NAMES) {
+      const subs = sublayersByBase.get(baseName);
+      if (!subs) {
+        // No data for this layer — empty stacks
+        layers.push(Array.from({ length: cellCount }, () => []));
+        continue;
+      }
+
+      // Find max sublayer index
+      let maxSub = 0;
+      for (const idx of subs.keys()) {
+        if (idx > maxSub) maxSub = idx;
+      }
+
+      // Build CellStack per cell
+      const stackLayer: CellStack[] = Array.from({ length: cellCount }, () => []);
+      for (let d = 0; d <= maxSub; d++) {
+        const flat = subs.get(d);
+        if (!flat) continue;
+        for (let i = 0; i < cellCount; i++) {
+          const gid = flat[i];
+          if (gid > 0) {
+            stackLayer[i].push(gid);
+          }
+        }
+      }
+      layers.push(stackLayer);
     }
 
     // Reconstruct animation groups from tileset tile definitions

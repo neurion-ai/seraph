@@ -1,5 +1,8 @@
 import type { TilesetCategory } from "../lib/tileset-loader";
 
+/** A cell can hold multiple stacked tile GIDs (bottom to top). Empty cell = []. */
+export type CellStack = number[];
+
 export type EditorTool = "brush" | "eraser" | "fill" | "stamp" | "object" | "walkability" | "hand";
 
 export interface TileSelection {
@@ -23,7 +26,7 @@ export interface Stamp {
 
 export interface MapDelta {
   layerIndex: number;
-  changes: Array<{ x: number; y: number; oldValue: number; newValue: number }>;
+  changes: Array<{ x: number; y: number; oldValue: CellStack; newValue: CellStack }>;
 }
 
 export interface SpawnPoint {
@@ -93,7 +96,7 @@ export interface BuildingFloor {
   /** Display name, e.g. "Ground Floor", "Upstairs" */
   name: string;
   /** Tile data layers for this floor interior (same dimensions as zone) */
-  layers: number[][]; // 5 layers, each zoneW * zoneH
+  layers: CellStack[][]; // 5 layers, each zoneW * zoneH
   /** Portals on this floor */
   portals: BuildingPortal[];
 }

@@ -116,9 +116,11 @@ export function ObjectPanel() {
                     </button>
                   </Tooltip>
                 )}
-                <span className="text-gray-600 flex-shrink-0">
-                  {Math.round(obj.x)},{Math.round(obj.y)}
-                </span>
+                {obj.type !== "spawn_point" && (
+                  <span className="text-gray-600 flex-shrink-0">
+                    {Math.round(obj.x)},{Math.round(obj.y)}
+                  </span>
+                )}
                 <button
                   onClick={() => { removeObject(i); if (spritePicker === i) setSpritePicker(null); }}
                   className="text-red-400 hover:text-red-300 ml-1 flex-shrink-0"
