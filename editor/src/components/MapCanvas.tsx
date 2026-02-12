@@ -5,7 +5,6 @@ import { renderMap } from "../lib/canvas-renderer";
 import { useCanvasInteraction } from "../hooks/useCanvasInteraction";
 import { getSpriteBasePath } from "../lib/sprite-registry";
 import { resolveTileGid, getTileSourceRect } from "../lib/tileset-loader";
-import type { TiledTileLayer } from "../types/map";
 import type { NPC } from "../types/editor";
 
 export function MapCanvas() {
@@ -30,25 +29,12 @@ export function MapCanvas() {
       canvas.height = rect.height;
     }
 
-    // Build TiledTileLayer objects for renderer
-    const tileLayers: TiledTileLayer[] = store.layers.map((data, i) => ({
-      id: i + 1,
-      name: store.layerNames[i],
-      type: "tilelayer",
-      width: store.mapWidth,
-      height: store.mapHeight,
-      x: 0,
-      y: 0,
-      data,
-      opacity: 1,
-      visible: true,
-    }));
-
     renderMap(
       ctx,
       canvas.width,
       canvas.height,
-      tileLayers,
+      store.layers,
+      store.layerNames,
       tilesetStore.tilesets,
       store.mapWidth,
       store.mapHeight,
@@ -320,16 +306,20 @@ function drawInteriorOverlay(
     const layerData = floor.layers[li];
     for (let lr = 0; lr < building.zoneH; lr++) {
       for (let lc = 0; lc < building.zoneW; lc++) {
-        const gid = layerData[lr * building.zoneW + lc];
-        if (gid <= 0) continue;
+        const stack = layerData[lr * building.zoneW + lc];
+        if (!stack || stack.length === 0) continue;
 
-        const resolved = resolveTileGid(gid, tilesetStore.tilesets);
-        if (!resolved) continue;
+        for (const gid of stack) {
+          if (gid <= 0) continue;
 
-        const { sx, sy, sw, sh } = getTileSourceRect(resolved.localId, resolved.tileset);
-        const dx = ox + (building.zoneCol + lc) * scaledTile;
-        const dy = oy + (building.zoneRow + lr) * scaledTile;
-        ctx.drawImage(resolved.tileset.image, sx, sy, sw, sh, dx, dy, scaledTile, scaledTile);
+          const resolved = resolveTileGid(gid, tilesetStore.tilesets);
+          if (!resolved) continue;
+
+          const { sx, sy, sw, sh } = getTileSourceRect(resolved.localId, resolved.tileset);
+          const dx = ox + (building.zoneCol + lc) * scaledTile;
+          const dy = oy + (building.zoneRow + lr) * scaledTile;
+          ctx.drawImage(resolved.tileset.image, sx, sy, sw, sh, dx, dy, scaledTile, scaledTile);
+        }
       }
     }
   }

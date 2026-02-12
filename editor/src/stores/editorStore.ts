@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { EditorTool, MapDelta, MapObject, BuildingDef, BuildingFloor } from "../types/editor";
+import type { EditorTool, MapDelta, MapObject, BuildingDef, BuildingFloor, CellStack } from "../types/editor";
 import { floodFill } from "../lib/flood-fill";
 import { UndoManager } from "../lib/undo";
 
@@ -8,12 +8,17 @@ const DEFAULT_MAP_WIDTH = 64;
 const DEFAULT_MAP_HEIGHT = 40;
 const TILE_LAYER_NAMES = ["ground", "terrain", "buildings", "decorations", "treetops"];
 
+/** Get the topmost GID from a cell stack (0 if empty) */
+function topOf(stack: CellStack): number {
+  return stack.length > 0 ? stack[stack.length - 1] : 0;
+}
+
 interface EditorStore {
   // Map data
   mapWidth: number;
   mapHeight: number;
   tileSize: number;
-  layers: number[][];
+  layers: CellStack[][];
   layerNames: string[];
   objects: MapObject[];
 
@@ -79,13 +84,24 @@ interface EditorStore {
 
   // Map settings
   newMap: (width: number, height: number) => void;
-  loadMapData: (layers: number[][], objects: MapObject[], width: number, height: number) => void;
+  loadMapData: (layers: CellStack[][], objects: MapObject[], width: number, height: number) => void;
 
   // Internal
   _undoManager: UndoManager;
   _pendingDelta: MapDelta | null;
   beginStroke: () => void;
   endStroke: () => void;
+}
+
+/** Push gid onto stack (skip if top already matches). gid=0 pops top. Returns new stack. */
+function stackPush(stack: CellStack, gid: number): CellStack {
+  if (gid === 0) {
+    // Erase: pop top
+    return stack.length > 0 ? stack.slice(0, -1) : [];
+  }
+  // Paint: push if different from top
+  if (topOf(stack) === gid) return stack;
+  return [...stack, gid];
 }
 
 export const useEditorStore = create<EditorStore>()(
@@ -95,7 +111,7 @@ export const useEditorStore = create<EditorStore>()(
   mapHeight: DEFAULT_MAP_HEIGHT,
   tileSize: 16,
   layers: TILE_LAYER_NAMES.map(
-    () => new Array(DEFAULT_MAP_WIDTH * DEFAULT_MAP_HEIGHT).fill(0)
+    () => Array.from({ length: DEFAULT_MAP_WIDTH * DEFAULT_MAP_HEIGHT }, () => [] as number[])
   ),
   layerNames: [...TILE_LAYER_NAMES],
   objects: [],
@@ -136,14 +152,15 @@ export const useEditorStore = create<EditorStore>()(
     const { layers, mapWidth, mapHeight, _pendingDelta } = get();
     if (col < 0 || col >= mapWidth || row < 0 || row >= mapHeight) return;
     const idx = row * mapWidth + col;
-    const oldValue = layers[layerIndex][idx];
-    if (oldValue === gid) return;
+    const oldStack = layers[layerIndex][idx];
+    const newStack = stackPush(oldStack, gid);
+    if (oldStack === newStack) return;
 
     const newLayers = layers.map((l, i) => (i === layerIndex ? [...l] : l));
-    newLayers[layerIndex][idx] = gid;
+    newLayers[layerIndex][idx] = newStack;
 
     if (_pendingDelta && _pendingDelta.layerIndex === layerIndex) {
-      _pendingDelta.changes.push({ x: col, y: row, oldValue, newValue: gid });
+      _pendingDelta.changes.push({ x: col, y: row, oldValue: [...oldStack], newValue: [...newStack] });
     }
 
     set({ layers: newLayers });
@@ -157,10 +174,11 @@ export const useEditorStore = create<EditorStore>()(
     for (const { col, row, gid } of tiles) {
       if (col < 0 || col >= mapWidth || row < 0 || row >= mapHeight) continue;
       const idx = row * mapWidth + col;
-      const oldValue = newLayer[idx];
-      if (oldValue === gid) continue;
-      newLayer[idx] = gid;
-      changes.push({ x: col, y: row, oldValue, newValue: gid });
+      const oldStack = newLayer[idx];
+      const newStack = stackPush(oldStack, gid);
+      if (oldStack === newStack) continue;
+      newLayer[idx] = newStack;
+      changes.push({ x: col, y: row, oldValue: [...oldStack], newValue: [...newStack] });
     }
 
     if (changes.length === 0) return;
@@ -181,7 +199,10 @@ export const useEditorStore = create<EditorStore>()(
 
     const delta: MapDelta = {
       layerIndex,
-      changes: changes.map((c) => ({ ...c, newValue: gid })),
+      changes: changes.map((c) => {
+        const idx = c.y * mapWidth + c.x;
+        return { x: c.x, y: c.y, oldValue: c.oldValue, newValue: [...newLayer[idx]] };
+      }),
     };
     _undoManager.push(delta);
 
@@ -203,10 +224,11 @@ export const useEditorStore = create<EditorStore>()(
         const gid = gids[r * selWidth + c];
         if (gid === undefined) continue;
         const idx = row * mapWidth + col;
-        const oldValue = newLayer[idx];
-        if (oldValue === gid) continue;
-        newLayer[idx] = gid;
-        changes.push({ x: col, y: row, oldValue, newValue: gid });
+        const oldStack = newLayer[idx];
+        const newStack = stackPush(oldStack, gid);
+        if (oldStack === newStack) continue;
+        newLayer[idx] = newStack;
+        changes.push({ x: col, y: row, oldValue: [...oldStack], newValue: [...newStack] });
       }
     }
 
@@ -260,10 +282,12 @@ export const useEditorStore = create<EditorStore>()(
     if (!floor) return;
     if (localCol < 0 || localCol >= building.zoneW || localRow < 0 || localRow >= building.zoneH) return;
     const idx = localRow * building.zoneW + localCol;
-    if (floor.layers[layerIndex]?.[idx] === gid) return;
+    const oldStack = floor.layers[layerIndex]?.[idx] ?? [];
+    const newStack = stackPush(oldStack, gid);
+    if (oldStack === newStack) return;
 
     const newFloorLayers = floor.layers.map((l, i) =>
-      i === layerIndex ? [...l.slice(0, idx), gid, ...l.slice(idx + 1)] : l
+      i === layerIndex ? [...l.slice(0, idx), newStack, ...l.slice(idx + 1)] : l
     );
     const newFloor: BuildingFloor = { ...floor, layers: newFloorLayers };
     const newFloors = building.floors.map((f, i) => (i === activeFloorIndex ? newFloor : f));
@@ -301,7 +325,7 @@ export const useEditorStore = create<EditorStore>()(
 
     const newLayers = layers.map((l) => [...l]);
     for (const change of delta.changes) {
-      newLayers[delta.layerIndex][change.y * mapWidth + change.x] = change.oldValue;
+      newLayers[delta.layerIndex][change.y * mapWidth + change.x] = [...change.oldValue];
     }
     set({ layers: newLayers });
   },
@@ -313,7 +337,7 @@ export const useEditorStore = create<EditorStore>()(
 
     const newLayers = layers.map((l) => [...l]);
     for (const change of delta.changes) {
-      newLayers[delta.layerIndex][change.y * mapWidth + change.x] = change.newValue;
+      newLayers[delta.layerIndex][change.y * mapWidth + change.x] = [...change.newValue];
     }
     set({ layers: newLayers });
   },
@@ -333,7 +357,9 @@ export const useEditorStore = create<EditorStore>()(
   },
 
   newMap: (width, height) => {
-    const layers = TILE_LAYER_NAMES.map(() => new Array(width * height).fill(0));
+    const layers = TILE_LAYER_NAMES.map(() =>
+      Array.from({ length: width * height }, () => [] as number[])
+    );
     set({
       mapWidth: width,
       mapHeight: height,
@@ -364,7 +390,7 @@ export const useEditorStore = create<EditorStore>()(
     }),
     {
       name: "seraph-editor-map",
-      version: 1,
+      version: 2,
       partialize: (state) => ({
         mapWidth: state.mapWidth,
         mapHeight: state.mapHeight,
@@ -382,6 +408,23 @@ export const useEditorStore = create<EditorStore>()(
         viewportOffsetY: state.viewportOffsetY,
         viewportZoom: state.viewportZoom,
       }),
+      migrate: (persisted: unknown, version: number) => {
+        if (version < 2) {
+          // Migrate from v1 (number[][]) to v2 (CellStack[][])
+          const old = persisted as Record<string, unknown>;
+          if (old.layers && Array.isArray(old.layers)) {
+            old.layers = (old.layers as unknown[][]).map((layer) => {
+              if (!Array.isArray(layer)) return layer;
+              return layer.map((cell) => {
+                if (Array.isArray(cell)) return cell; // already migrated
+                const n = cell as number;
+                return n > 0 ? [n] : [];
+              });
+            });
+          }
+        }
+        return persisted as EditorStore;
+      },
     }
   )
 );

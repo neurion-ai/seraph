@@ -123,10 +123,11 @@ export function useCanvasInteraction(canvasRef: React.RefObject<HTMLCanvasElemen
         if (gids.length !== 1) return;
         store.fillTiles(activeLayerIndex, col, row, gids[0]);
       } else if (activeTool === "walkability") {
-        // Toggle walkability for whatever tile is at this position
+        // Toggle walkability for the topmost tile at this position
         const { layers } = store;
         for (let li = layers.length - 1; li >= 0; li--) {
-          const gid = layers[li][row * store.mapWidth + col];
+          const stack = layers[li][row * store.mapWidth + col];
+          const gid = stack && stack.length > 0 ? stack[stack.length - 1] : 0;
           if (gid > 0) {
             const tilesets = tilesetStore.tilesets;
             for (let ti = tilesets.length - 1; ti >= 0; ti--) {

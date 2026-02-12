@@ -8,7 +8,9 @@ const TILE_LAYER_COUNT = 5;
 function createEmptyFloor(name: string, w: number, h: number): BuildingFloor {
   return {
     name,
-    layers: Array.from({ length: TILE_LAYER_COUNT }, () => new Array(w * h).fill(0)),
+    layers: Array.from({ length: TILE_LAYER_COUNT }, () =>
+      Array.from({ length: w * h }, () => [] as number[])
+    ),
     portals: [],
   };
 }

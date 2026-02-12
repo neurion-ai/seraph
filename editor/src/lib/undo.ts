@@ -1,4 +1,4 @@
-import type { MapDelta } from "../types/editor";
+import type { MapDelta, CellStack } from "../types/editor";
 
 const MAX_UNDO = 100;
 
@@ -14,27 +14,9 @@ export class UndoManager {
     this.redoStack = [];
   }
 
-  undo(layers: number[][]): MapDelta | null {
+  undo(_layers: CellStack[][]): MapDelta | null {
     const delta = this.undoStack.pop();
     if (!delta) return null;
-
-    // Apply inverse
-    const layer = layers[delta.layerIndex];
-    const inverseDelta: MapDelta = {
-      layerIndex: delta.layerIndex,
-      changes: [],
-    };
-
-    for (const change of delta.changes) {
-      const idx = change.y * Math.sqrt(layer.length) | 0; // not clean but works
-      inverseDelta.changes.push({
-        x: change.x,
-        y: change.y,
-        oldValue: change.newValue,
-        newValue: change.oldValue,
-      });
-    }
-
     this.redoStack.push(delta);
     return delta;
   }
