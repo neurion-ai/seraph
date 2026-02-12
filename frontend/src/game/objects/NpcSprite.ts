@@ -91,7 +91,7 @@ export class NpcSprite {
       this.scene.anims.create({
         key: this.prefix(`walk-${dir}`),
         frames,
-        frameRate: 5,
+        frameRate: 8,
         repeat: -1,
       });
     }
@@ -139,7 +139,7 @@ export class NpcSprite {
       x,
       y,
       duration,
-      ease: "Sine.easeInOut",
+      ease: "Linear",
       onComplete: () => {
         this.currentTween = null;
         onComplete?.();

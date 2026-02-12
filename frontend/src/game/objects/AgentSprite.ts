@@ -358,7 +358,7 @@ export class AgentSprite {
       x,
       y,
       duration,
-      ease: "Sine.easeInOut",
+      ease: "Linear",
       onComplete: () => {
         this.currentTween = null;
         onComplete?.();
