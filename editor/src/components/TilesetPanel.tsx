@@ -5,6 +5,7 @@ import { Tooltip } from "./Tooltip";
 import { renderTilesetPreview } from "../lib/canvas-renderer";
 import { CATEGORIES, getTilesetConfigs } from "../lib/tileset-loader";
 import { AnimationDefiner } from "./AnimationDefiner";
+import type { TileAnimationGroup } from "../types/editor";
 
 const TILESET_SCALE = 2;
 
@@ -15,13 +16,50 @@ const TILESET_HINTS: Record<string, string> = Object.fromEntries(
 
 export function TilesetPanel() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { tilesets, activeTilesetIndex, selectedTiles, activeCategory, animDefinerOpen } = useTilesetStore();
+  const { tilesets, activeTilesetIndex, selectedTiles, activeCategory, animDefinerOpen, animationGroups } = useTilesetStore();
   const showWalkability = useEditorStore((s) => s.showWalkability);
   const activeTool = useEditorStore((s) => s.activeTool);
   const isDragging = useRef(false);
   const [dragStart, setDragStart] = useState<{ col: number; row: number } | null>(null);
 
   const activeTileset = tilesets[activeTilesetIndex];
+
+  // Animation groups for the current tileset
+  const currentAnimGroups = animationGroups.filter(
+    (g) => g.tilesetIndex === activeTilesetIndex
+  );
+
+  const selectAnimAnchor = useCallback(
+    (group: TileAnimationGroup) => {
+      const store = useTilesetStore.getState();
+      // Switch tileset if needed
+      if (group.tilesetIndex !== store.activeTilesetIndex) {
+        store.setActiveTileset(group.tilesetIndex);
+      }
+      const ts = store.tilesets[group.tilesetIndex];
+      if (!ts || group.entries.length === 0) return;
+
+      if (group.entries.length === 1) {
+        const localId = group.entries[0].anchorLocalId;
+        const col = localId % ts.columns;
+        const row = Math.floor(localId / ts.columns);
+        store.setSelectedTiles({ startCol: col, startRow: row, endCol: col, endRow: row });
+      } else {
+        // Bounding box of all anchor tiles
+        let minCol = Infinity, maxCol = -Infinity, minRow = Infinity, maxRow = -Infinity;
+        for (const entry of group.entries) {
+          const col = entry.anchorLocalId % ts.columns;
+          const row = Math.floor(entry.anchorLocalId / ts.columns);
+          if (col < minCol) minCol = col;
+          if (col > maxCol) maxCol = col;
+          if (row < minRow) minRow = row;
+          if (row > maxRow) maxRow = row;
+        }
+        store.setSelectedTiles({ startCol: minCol, startRow: minRow, endCol: maxCol, endRow: maxRow });
+      }
+    },
+    []
+  );
 
   // Filter tilesets by active category
   const filteredTilesets = activeCategory
@@ -173,6 +211,24 @@ export function TilesetPanel() {
           >
             Define Animations
           </button>
+        </div>
+      )}
+
+      {/* Animation quick-select list */}
+      {!animDefinerOpen && currentAnimGroups.length > 0 && (
+        <div className="border-b border-gray-700 px-1 py-1">
+          <div className="text-[9px] text-gray-500 mb-0.5">Animations:</div>
+          <div className="flex flex-wrap gap-1">
+            {currentAnimGroups.map((group) => (
+              <button
+                key={group.id}
+                onClick={() => selectAnimAnchor(group)}
+                className="px-1.5 py-0.5 text-[10px] rounded bg-purple-800 text-purple-200 hover:bg-purple-600"
+              >
+                {group.name}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
