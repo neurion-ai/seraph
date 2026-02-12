@@ -1,0 +1,245 @@
+import { useRef, useEffect, useCallback } from "react";
+import { useEditorStore } from "../stores/editorStore";
+import { useTilesetStore } from "../stores/tilesetStore";
+import { renderMap } from "../lib/canvas-renderer";
+import { useCanvasInteraction } from "../hooks/useCanvasInteraction";
+import { getSpriteBasePath } from "../lib/sprite-registry";
+import type { TiledTileLayer } from "../types/map";
+import type { NPC } from "../types/editor";
+
+export function MapCanvas() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animFrameRef = useRef<number>(0);
+  const { onMouseDown, onMouseMove, onMouseUp, onWheel } = useCanvasInteraction(canvasRef);
+
+  const render = useCallback((timestamp?: DOMHighResTimeStamp) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const store = useEditorStore.getState();
+    const tilesetStore = useTilesetStore.getState();
+    const ts = timestamp ?? 0;
+
+    // Resize canvas to match container
+    const rect = canvas.parentElement!.getBoundingClientRect();
+    if (canvas.width !== rect.width || canvas.height !== rect.height) {
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+    }
+
+    // Build TiledTileLayer objects for renderer
+    const tileLayers: TiledTileLayer[] = store.layers.map((data, i) => ({
+      id: i + 1,
+      name: store.layerNames[i],
+      type: "tilelayer",
+      width: store.mapWidth,
+      height: store.mapHeight,
+      x: 0,
+      y: 0,
+      data,
+      opacity: 1,
+      visible: true,
+    }));
+
+    renderMap(
+      ctx,
+      canvas.width,
+      canvas.height,
+      tileLayers,
+      tilesetStore.tilesets,
+      store.mapWidth,
+      store.mapHeight,
+      store.tileSize,
+      {
+        offsetX: store.viewportOffsetX,
+        offsetY: store.viewportOffsetY,
+        zoom: store.viewportZoom,
+      },
+      store.layerVisibility,
+      store.activeLayerIndex,
+      store.showGrid,
+      store.showWalkability,
+      tilesetStore.animationLookup,
+      ts,
+      store.showAnimations,
+    );
+
+    // Draw objects on top
+    drawObjects(ctx, store, tilesetStore.spriteImageCache, ts);
+
+    animFrameRef.current = requestAnimationFrame(render);
+  }, []);
+
+  useEffect(() => {
+    animFrameRef.current = requestAnimationFrame(render);
+    return () => cancelAnimationFrame(animFrameRef.current);
+  }, [render]);
+
+  const activeTool = useEditorStore((s) => s.activeTool);
+  const cursorClass =
+    activeTool === "hand" ? "cursor-grab active:cursor-grabbing" :
+    activeTool === "object" ? "cursor-default" :
+    "cursor-crosshair";
+
+  return (
+    <div className="flex-1 relative overflow-hidden bg-gray-800">
+      <canvas
+        ref={canvasRef}
+        className={`absolute inset-0 ${cursorClass}`}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseUp}
+        onWheel={onWheel}
+        onContextMenu={(e) => e.preventDefault()}
+      />
+      <div className="absolute bottom-2 right-2 text-xs text-gray-500 pointer-events-none select-none">
+        {useEditorStore((s) => `${s.mapWidth}×${s.mapHeight} | Zoom: ${s.viewportZoom.toFixed(1)}x`)}
+      </div>
+    </div>
+  );
+}
+
+function drawObjects(
+  ctx: CanvasRenderingContext2D,
+  store: ReturnType<typeof useEditorStore.getState>,
+  spriteCache: Map<string, HTMLImageElement>,
+  timestamp: number,
+) {
+  const { viewportOffsetX: ox, viewportOffsetY: oy, viewportZoom: zoom, tileSize } = store;
+  const scale = tileSize * zoom;
+
+  for (const obj of store.objects) {
+    const x = ox + (obj.x / tileSize) * scale;
+    const y = oy + (obj.y / tileSize) * scale;
+
+    if (obj.type === "tool_station") {
+      ctx.fillStyle = "rgba(226, 183, 20, 0.6)";
+      ctx.fillRect(x, y, scale, scale);
+      ctx.strokeStyle = "#e2b714";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, y, scale, scale);
+
+      ctx.fillStyle = "#fff";
+      ctx.font = `${Math.max(8, 10 * zoom)}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText(obj.name, x + scale / 2, y - 4);
+    } else if (obj.type === "spawn_point") {
+      // If a sprite is assigned, render it
+      if (obj.spriteSheet) {
+        const imgPath = `${getSpriteBasePath("character")}/${obj.spriteSheet}.png`;
+        const img = spriteCache.get(imgPath);
+        const frameW = 24;
+        const frameH = 24;
+        // Crop 16x16 content from center of 24x24 frame (4px left, 8px top margin)
+        const cropX = 4;
+        const cropY = 8;
+        const cropSize = 16;
+
+        // Animate through first 4 columns (walk cycle) when showAnimations
+        let srcCol = 0;
+        const srcRow = 0;
+        if (store.showAnimations) {
+          srcCol = Math.floor(timestamp / 200) % 4;
+        }
+
+        if (img) {
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(img, srcCol * frameW + cropX, srcRow * frameH + cropY, cropSize, cropSize, x, y, scale, scale);
+          ctx.imageSmoothingEnabled = true;
+        } else {
+          // Fallback circle while loading
+          ctx.fillStyle = "rgba(59, 130, 246, 0.4)";
+          ctx.beginPath();
+          ctx.arc(x + scale / 2, y + scale / 2, scale / 3, 0, Math.PI * 2);
+          ctx.fill();
+          useTilesetStore.getState().loadSpriteImage(imgPath).catch(() => {});
+        }
+
+        // Blue border around sprite
+        ctx.strokeStyle = "#3b82f6";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, scale, scale);
+      } else {
+        // No sprite assigned — default blue circle
+        ctx.fillStyle = "rgba(59, 130, 246, 0.6)";
+        ctx.beginPath();
+        ctx.arc(x + scale / 2, y + scale / 2, scale / 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#3b82f6";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = "#fff";
+      ctx.font = `${Math.max(8, 10 * zoom)}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText(obj.name, x + scale / 2, y - 4);
+    } else if (obj.type === "npc") {
+      drawNPC(ctx, obj, x, y, scale, zoom, spriteCache, timestamp, store.showAnimations);
+    }
+  }
+  ctx.textAlign = "left";
+}
+
+function drawNPC(
+  ctx: CanvasRenderingContext2D,
+  npc: NPC,
+  x: number,
+  y: number,
+  scale: number,
+  zoom: number,
+  spriteCache: Map<string, HTMLImageElement>,
+  timestamp: number,
+  showAnimations: boolean,
+) {
+  const basePath = getSpriteBasePath(npc.spriteType);
+  const imgPath = `${basePath}/${npc.spriteSheet}.png`;
+  const img = spriteCache.get(imgPath);
+
+  const frameW = 24;
+  const frameH = 24;
+  // Crop 16x16 content from center of 24x24 frame (4px left, 8px top margin)
+  const cropX = 4;
+  const cropY = 8;
+  const cropSize = 16;
+
+  if (img) {
+    let srcCol = npc.frameCol;
+    const srcRow = npc.frameRow;
+
+    // Animate by cycling through the character's walk frames
+    if (showAnimations) {
+      const animCols = npc.spriteType === "character" ? 4 : 3;
+      const baseCol = npc.frameCol; // colOffset: 0, 4, 8, or 12 for characters; 0 for enemies
+      srcCol = baseCol + Math.floor(timestamp / 200) % animCols;
+    }
+
+    const sx = srcCol * frameW + cropX;
+    const sy = srcRow * frameH + cropY;
+
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, sx, sy, cropSize, cropSize, x, y, scale, scale);
+    ctx.imageSmoothingEnabled = true;
+  } else {
+    // Fallback: purple rectangle while sprite loads
+    ctx.fillStyle = "rgba(168, 85, 247, 0.4)";
+    ctx.fillRect(x, y, scale, scale);
+
+    // Kick off async load
+    useTilesetStore.getState().loadSpriteImage(imgPath).catch(() => {});
+  }
+
+  // Purple border
+  ctx.strokeStyle = "#a855f7";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x, y, scale, scale);
+
+  // Label
+  ctx.fillStyle = "#d8b4fe";
+  ctx.font = `${Math.max(8, 10 * zoom)}px sans-serif`;
+  ctx.textAlign = "center";
+  ctx.fillText(npc.name, x + scale / 2, y - 4);
+}

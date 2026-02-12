@@ -1,0 +1,330 @@
+import type { TiledMap, TiledTileLayer, TiledObjectLayer, TiledTilesetRef, TiledTileDef } from "../types/map";
+import type { LoadedTileset, MapObject, TileAnimationGroup, TileAnimationEntry } from "../types/editor";
+
+const TILED_VERSION = "1.10.2";
+const MAP_VERSION = "1.10";
+
+export function createEmptyMap(
+  width: number,
+  height: number,
+  tileSize: number,
+  tilesets: LoadedTileset[],
+): TiledMap {
+  const tileLayerNames = ["ground", "terrain", "buildings", "decorations", "treetops"];
+
+  const layers: (TiledTileLayer | TiledObjectLayer)[] = tileLayerNames.map((name, i) => ({
+    id: i + 1,
+    name,
+    type: "tilelayer" as const,
+    width,
+    height,
+    x: 0,
+    y: 0,
+    data: new Array(width * height).fill(0),
+    opacity: 1,
+    visible: true,
+  }));
+
+  // Object layer
+  layers.push({
+    id: tileLayerNames.length + 1,
+    name: "objects",
+    type: "objectgroup",
+    x: 0,
+    y: 0,
+    objects: [],
+    opacity: 1,
+    visible: true,
+  });
+
+  const tilesetRefs: TiledTilesetRef[] = tilesets.map((ts) => ({
+    firstgid: ts.firstGid,
+    name: ts.name,
+    tilewidth: ts.tileWidth,
+    tileheight: ts.tileHeight,
+    tilecount: ts.tileCount,
+    columns: ts.columns,
+    image: tilesetImagePath(ts),
+    imagewidth: ts.imageWidth,
+    imageheight: ts.imageHeight,
+    tiles: ts.walkability
+      .map((walkable, id) =>
+        walkable
+          ? null
+          : {
+              id,
+              properties: [{ name: "walkable", type: "bool" as const, value: false }],
+            }
+      )
+      .filter((t): t is NonNullable<typeof t> => t !== null),
+  }));
+
+  return {
+    width,
+    height,
+    tilewidth: tileSize,
+    tileheight: tileSize,
+    orientation: "orthogonal",
+    renderorder: "right-down",
+    tiledversion: TILED_VERSION,
+    version: MAP_VERSION,
+    type: "map",
+    layers,
+    tilesets: tilesetRefs,
+  };
+}
+
+/** Resolve the relative image path for a tileset based on its category */
+function tilesetImagePath(ts: LoadedTileset): string {
+  const dir = ts.category === "animations" ? "animations" : "tilesets";
+  return `../assets/${dir}/${ts.name}.png`;
+}
+
+export function serializeMap(
+  layers: number[][],
+  layerNames: string[],
+  mapWidth: number,
+  mapHeight: number,
+  tileSize: number,
+  tilesets: LoadedTileset[],
+  objects: MapObject[],
+  animationGroups?: TileAnimationGroup[],
+): TiledMap {
+  const tileLayers: TiledTileLayer[] = layerNames.map((name, i) => ({
+    id: i + 1,
+    name,
+    type: "tilelayer",
+    width: mapWidth,
+    height: mapHeight,
+    x: 0,
+    y: 0,
+    data: [...layers[i]],
+    opacity: 1,
+    visible: true,
+  }));
+
+  const objectLayer: TiledObjectLayer = {
+    id: layerNames.length + 1,
+    name: "objects",
+    type: "objectgroup",
+    x: 0,
+    y: 0,
+    objects: objects.map((obj, i) => {
+      const base = {
+        id: i + 1,
+        name: obj.name,
+        type: obj.type,
+        x: obj.x,
+        y: obj.y,
+        width: 16,
+        height: 16,
+        visible: true,
+      };
+
+      if (obj.type === "tool_station") {
+        return {
+          ...base,
+          properties: [
+            { name: "tool_key", type: "string" as const, value: obj.toolKey },
+            { name: "animation", type: "string" as const, value: obj.animation },
+            { name: "tooltip", type: "string" as const, value: obj.tooltip },
+          ],
+        };
+      }
+
+      if (obj.type === "spawn_point" && obj.spriteSheet) {
+        return {
+          ...base,
+          properties: [
+            { name: "sprite_sheet", type: "string" as const, value: obj.spriteSheet },
+          ],
+        };
+      }
+
+      if (obj.type === "npc") {
+        return {
+          ...base,
+          properties: [
+            { name: "sprite_sheet", type: "string" as const, value: obj.spriteSheet },
+            { name: "sprite_type", type: "string" as const, value: obj.spriteType },
+            { name: "frame_col", type: "int" as const, value: obj.frameCol },
+            { name: "frame_row", type: "int" as const, value: obj.frameRow },
+          ],
+        };
+      }
+
+      return base;
+    }),
+    opacity: 1,
+    visible: true,
+  };
+
+  const tilesetRefs: TiledTilesetRef[] = tilesets.map((ts, tsIndex) => {
+    // Start with walkability tile defs
+    const tileDefMap = new Map<number, TiledTileDef>();
+
+    ts.walkability.forEach((walkable, id) => {
+      if (!walkable) {
+        tileDefMap.set(id, {
+          id,
+          properties: [{ name: "walkable", type: "bool" as const, value: false }],
+        });
+      }
+    });
+
+    // Merge animation frames from matching groups
+    if (animationGroups) {
+      for (const group of animationGroups) {
+        if (group.tilesetIndex !== tsIndex) continue;
+        for (const entry of group.entries) {
+          const existing = tileDefMap.get(entry.anchorLocalId);
+          const animFrames = entry.frames.map((localId) => ({
+            tileid: localId,
+            duration: group.frameDuration,
+          }));
+          if (existing) {
+            existing.animation = animFrames;
+          } else {
+            tileDefMap.set(entry.anchorLocalId, { id: entry.anchorLocalId, animation: animFrames });
+          }
+        }
+      }
+    }
+
+    return {
+      firstgid: ts.firstGid,
+      name: ts.name,
+      tilewidth: ts.tileWidth,
+      tileheight: ts.tileHeight,
+      tilecount: ts.tileCount,
+      columns: ts.columns,
+      image: tilesetImagePath(ts),
+      imagewidth: ts.imageWidth,
+      imageheight: ts.imageHeight,
+      tiles: Array.from(tileDefMap.values()),
+    };
+  });
+
+  return {
+    width: mapWidth,
+    height: mapHeight,
+    tilewidth: tileSize,
+    tileheight: tileSize,
+    orientation: "orthogonal",
+    renderorder: "right-down",
+    tiledversion: TILED_VERSION,
+    version: MAP_VERSION,
+    type: "map",
+    layers: [...tileLayers, objectLayer],
+    tilesets: tilesetRefs,
+  };
+}
+
+export function saveMapToFile(map: TiledMap, filename: string) {
+  const json = JSON.stringify(map, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function parseMapFromJson(json: string): {
+  layers: number[][];
+  objects: MapObject[];
+  width: number;
+  height: number;
+  animationGroups: TileAnimationGroup[];
+} | null {
+  try {
+    const map: TiledMap = JSON.parse(json);
+    const layers: number[][] = [];
+    const objects: MapObject[] = [];
+    const animationGroups: TileAnimationGroup[] = [];
+
+    for (const layer of map.layers) {
+      if (layer.type === "tilelayer") {
+        layers.push([...layer.data]);
+      } else if (layer.type === "objectgroup") {
+        for (const obj of layer.objects) {
+          if (obj.type === "tool_station") {
+            const props = obj.properties ?? [];
+            objects.push({
+              name: obj.name,
+              type: "tool_station",
+              x: obj.x,
+              y: obj.y,
+              toolKey: String(props.find((p) => p.name === "tool_key")?.value ?? ""),
+              animation: String(props.find((p) => p.name === "animation")?.value ?? ""),
+              tooltip: String(props.find((p) => p.name === "tooltip")?.value ?? ""),
+            });
+          } else if (obj.type === "spawn_point") {
+            const props = obj.properties ?? [];
+            const spriteSheet = props.find((p) => p.name === "sprite_sheet")?.value;
+            const sp: MapObject = {
+              name: obj.name,
+              type: "spawn_point",
+              x: obj.x,
+              y: obj.y,
+              ...(spriteSheet ? { spriteSheet: String(spriteSheet) } : {}),
+            };
+            objects.push(sp);
+          } else if (obj.type === "npc") {
+            const props = obj.properties ?? [];
+            objects.push({
+              name: obj.name,
+              type: "npc",
+              x: obj.x,
+              y: obj.y,
+              spriteSheet: String(props.find((p) => p.name === "sprite_sheet")?.value ?? ""),
+              spriteType: (String(props.find((p) => p.name === "sprite_type")?.value ?? "character") as "character" | "enemy"),
+              frameCol: Number(props.find((p) => p.name === "frame_col")?.value ?? 0),
+              frameRow: Number(props.find((p) => p.name === "frame_row")?.value ?? 0),
+            });
+          }
+        }
+      }
+    }
+
+    // Reconstruct animation groups from tileset tile definitions
+    for (let tsIndex = 0; tsIndex < map.tilesets.length; tsIndex++) {
+      const tsRef = map.tilesets[tsIndex];
+      if (!tsRef.tiles) continue;
+
+      // Group animated tiles by frameDuration
+      const byDuration = new Map<number, TileAnimationEntry[]>();
+
+      for (const tileDef of tsRef.tiles) {
+        if (!tileDef.animation || tileDef.animation.length === 0) continue;
+        const duration = tileDef.animation[0].duration;
+        const entry: TileAnimationEntry = {
+          anchorLocalId: tileDef.id,
+          frames: tileDef.animation.map((f) => f.tileid),
+        };
+        let arr = byDuration.get(duration);
+        if (!arr) {
+          arr = [];
+          byDuration.set(duration, arr);
+        }
+        arr.push(entry);
+      }
+
+      for (const [frameDuration, entries] of byDuration) {
+        animationGroups.push({
+          id: crypto.randomUUID(),
+          name: `${tsRef.name ?? "Tileset"} ${frameDuration}ms`,
+          tilesetIndex: tsIndex,
+          frameDuration,
+          entries,
+        });
+      }
+    }
+
+    // Also restore walkability from tileset tile properties
+    return { layers, objects, width: map.width, height: map.height, animationGroups };
+  } catch {
+    return null;
+  }
+}
