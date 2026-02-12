@@ -26,16 +26,6 @@ export interface MapDelta {
   changes: Array<{ x: number; y: number; oldValue: number; newValue: number }>;
 }
 
-export interface ToolStation {
-  name: string;
-  type: "tool_station";
-  x: number;
-  y: number;
-  toolKey: string;
-  animation: string;
-  tooltip: string;
-}
-
 export interface SpawnPoint {
   name: string;
   type: "spawn_point";
@@ -56,7 +46,15 @@ export interface NPC {
   frameRow: number;
 }
 
-export type MapObject = ToolStation | SpawnPoint | NPC;
+export type MapObject = SpawnPoint | NPC;
+
+/** A recently used tile selection for quick re-selection */
+export interface RecentTileSelection {
+  tilesetIndex: number;
+  selection: TileSelection;
+  /** Timestamp for ordering (most recent first) */
+  usedAt: number;
+}
 
 /** A single tile that participates in an animation — the anchor local ID + its frame sequence */
 export interface TileAnimationEntry {
@@ -71,6 +69,8 @@ export interface TileAnimationGroup {
   tilesetIndex: number;
   frameDuration: number;
   entries: TileAnimationEntry[];
+  /** When true, this group is included in the magic effect pool for tool-use animations */
+  isMagicEffect?: boolean;
 }
 
 /** Pre-computed lookup: GID → animation frames for fast rendering */
@@ -78,6 +78,39 @@ export type AnimationLookup = Map<
   number,
   { frames: { gid: number; duration: number }[]; totalDuration: number }
 >;
+
+/** A portal connects building exterior to interior or floors to each other */
+export interface BuildingPortal {
+  /** Tile position within the building zone */
+  localCol: number;
+  localRow: number;
+  /** "entry" = door from outside, "stairs_up", "stairs_down" */
+  kind: "entry" | "stairs_up" | "stairs_down";
+}
+
+/** One floor of a building interior */
+export interface BuildingFloor {
+  /** Display name, e.g. "Ground Floor", "Upstairs" */
+  name: string;
+  /** Tile data layers for this floor interior (same dimensions as zone) */
+  layers: number[][]; // 5 layers, each zoneW * zoneH
+  /** Portals on this floor */
+  portals: BuildingPortal[];
+}
+
+/** A building definition anchored to a rectangular zone on the map */
+export interface BuildingDef {
+  id: string;
+  name: string;
+  /** Top-left tile of the building zone on the world map */
+  zoneCol: number;
+  zoneRow: number;
+  /** Zone dimensions in tiles */
+  zoneW: number;
+  zoneH: number;
+  /** Interior floors (index 0 = ground floor) */
+  floors: BuildingFloor[];
+}
 
 export interface LoadedTileset {
   name: string;

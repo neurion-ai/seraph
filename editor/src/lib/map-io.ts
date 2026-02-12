@@ -1,5 +1,5 @@
 import type { TiledMap, TiledTileLayer, TiledObjectLayer, TiledTilesetRef, TiledTileDef } from "../types/map";
-import type { LoadedTileset, MapObject, TileAnimationGroup, TileAnimationEntry } from "../types/editor";
+import type { LoadedTileset, MapObject, TileAnimationGroup, TileAnimationEntry, BuildingDef } from "../types/editor";
 
 const TILED_VERSION = "1.10.2";
 const MAP_VERSION = "1.10";
@@ -89,6 +89,7 @@ export function serializeMap(
   tilesets: LoadedTileset[],
   objects: MapObject[],
   animationGroups?: TileAnimationGroup[],
+  buildings?: BuildingDef[],
 ): TiledMap {
   const tileLayers: TiledTileLayer[] = layerNames.map((name, i) => ({
     id: i + 1,
@@ -120,17 +121,6 @@ export function serializeMap(
         height: 16,
         visible: true,
       };
-
-      if (obj.type === "tool_station") {
-        return {
-          ...base,
-          properties: [
-            { name: "tool_key", type: "string" as const, value: obj.toolKey },
-            { name: "animation", type: "string" as const, value: obj.animation },
-            { name: "tooltip", type: "string" as const, value: obj.tooltip },
-          ],
-        };
-      }
 
       if (obj.type === "spawn_point" && obj.spriteSheet) {
         return {
@@ -205,6 +195,43 @@ export function serializeMap(
     };
   });
 
+  // Collect magic effect groups for map-level property
+  const magicEffects = (animationGroups ?? []).filter((g) => g.isMagicEffect);
+  const properties: TiledMap["properties"] = [];
+
+  if (magicEffects.length > 0) {
+    properties.push({
+      name: "magic_effects",
+      type: "string",
+      value: JSON.stringify(
+        magicEffects.map((g) => {
+          const ts = tilesets[g.tilesetIndex];
+          return {
+            id: g.id,
+            name: g.name,
+            tilesetName: ts?.name ?? "",
+            tileWidth: ts?.tileWidth ?? 16,
+            tileHeight: ts?.tileHeight ?? 16,
+            columns: ts?.columns ?? 1,
+            frameDuration: g.frameDuration,
+            entries: g.entries.map((e) => ({
+              anchorLocalId: e.anchorLocalId,
+              frames: e.frames,
+            })),
+          };
+        })
+      ),
+    });
+  }
+
+  if (buildings && buildings.length > 0) {
+    properties.push({
+      name: "buildings",
+      type: "string",
+      value: JSON.stringify(buildings),
+    });
+  }
+
   return {
     width: mapWidth,
     height: mapHeight,
@@ -217,6 +244,7 @@ export function serializeMap(
     type: "map",
     layers: [...tileLayers, objectLayer],
     tilesets: tilesetRefs,
+    ...(properties.length > 0 ? { properties } : {}),
   };
 }
 
@@ -237,6 +265,7 @@ export function parseMapFromJson(json: string): {
   width: number;
   height: number;
   animationGroups: TileAnimationGroup[];
+  buildings: BuildingDef[];
 } | null {
   try {
     const map: TiledMap = JSON.parse(json);
@@ -249,18 +278,7 @@ export function parseMapFromJson(json: string): {
         layers.push([...layer.data]);
       } else if (layer.type === "objectgroup") {
         for (const obj of layer.objects) {
-          if (obj.type === "tool_station") {
-            const props = obj.properties ?? [];
-            objects.push({
-              name: obj.name,
-              type: "tool_station",
-              x: obj.x,
-              y: obj.y,
-              toolKey: String(props.find((p) => p.name === "tool_key")?.value ?? ""),
-              animation: String(props.find((p) => p.name === "animation")?.value ?? ""),
-              tooltip: String(props.find((p) => p.name === "tooltip")?.value ?? ""),
-            });
-          } else if (obj.type === "spawn_point") {
+          if (obj.type === "spawn_point") {
             const props = obj.properties ?? [];
             const spriteSheet = props.find((p) => p.name === "sprite_sheet")?.value;
             const sp: MapObject = {
@@ -322,8 +340,62 @@ export function parseMapFromJson(json: string): {
       }
     }
 
+    // Restore magic effect groups from map-level properties
+    const magicProp = map.properties?.find((p) => p.name === "magic_effects");
+    if (magicProp && typeof magicProp.value === "string") {
+      try {
+        const effects = JSON.parse(magicProp.value) as Array<{
+          id: string;
+          name: string;
+          tilesetName: string;
+          frameDuration: number;
+          entries: TileAnimationEntry[];
+        }>;
+        for (const fx of effects) {
+          // Match tilesetName to tileset index
+          const tsIndex = map.tilesets.findIndex((ts) => ts.name === fx.tilesetName);
+          if (tsIndex < 0) continue;
+          // Check if this group was already reconstructed from tile animations
+          const existing = animationGroups.find(
+            (g) =>
+              g.tilesetIndex === tsIndex &&
+              g.frameDuration === fx.frameDuration &&
+              g.entries.length === fx.entries.length &&
+              g.entries.every((e, i) => e.anchorLocalId === fx.entries[i].anchorLocalId)
+          );
+          if (existing) {
+            existing.isMagicEffect = true;
+            existing.name = fx.name;
+            existing.id = fx.id;
+          } else {
+            animationGroups.push({
+              id: fx.id,
+              name: fx.name,
+              tilesetIndex: tsIndex,
+              frameDuration: fx.frameDuration,
+              entries: fx.entries,
+              isMagicEffect: true,
+            });
+          }
+        }
+      } catch {
+        // Ignore malformed magic_effects
+      }
+    }
+
+    // Restore buildings from map-level properties
+    let buildings: BuildingDef[] = [];
+    const buildingsProp = map.properties?.find((p) => p.name === "buildings");
+    if (buildingsProp && typeof buildingsProp.value === "string") {
+      try {
+        buildings = JSON.parse(buildingsProp.value) as BuildingDef[];
+      } catch {
+        // Ignore malformed buildings
+      }
+    }
+
     // Also restore walkability from tileset tile properties
-    return { layers, objects, width: map.width, height: map.height, animationGroups };
+    return { layers, objects, width: map.width, height: map.height, animationGroups, buildings };
   } catch {
     return null;
   }
