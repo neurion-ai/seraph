@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type { EditorTool, MapDelta, MapObject } from "../types/editor";
 import { floodFill } from "../lib/flood-fill";
 import { UndoManager } from "../lib/undo";
@@ -74,7 +75,9 @@ interface EditorStore {
   endStroke: () => void;
 }
 
-export const useEditorStore = create<EditorStore>((set, get) => ({
+export const useEditorStore = create<EditorStore>()(
+  persist(
+    (set, get) => ({
   mapWidth: DEFAULT_MAP_WIDTH,
   mapHeight: DEFAULT_MAP_HEIGHT,
   tileSize: 16,
@@ -293,4 +296,26 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
     get()._undoManager.clear();
   },
-}));
+    }),
+    {
+      name: "seraph-editor-map",
+      version: 1,
+      partialize: (state) => ({
+        mapWidth: state.mapWidth,
+        mapHeight: state.mapHeight,
+        layers: state.layers,
+        layerNames: state.layerNames,
+        objects: state.objects,
+        activeLayerIndex: state.activeLayerIndex,
+        layerVisibility: state.layerVisibility,
+        activeTool: state.activeTool,
+        showGrid: state.showGrid,
+        showWalkability: state.showWalkability,
+        showAnimations: state.showAnimations,
+        viewportOffsetX: state.viewportOffsetX,
+        viewportOffsetY: state.viewportOffsetY,
+        viewportZoom: state.viewportZoom,
+      }),
+    }
+  )
+);

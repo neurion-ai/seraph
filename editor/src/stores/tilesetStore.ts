@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type { LoadedTileset, TileSelection, TileAnimationGroup, AnimationLookup } from "../types/editor";
 import { loadAllTilesets, type TilesetCategory } from "../lib/tileset-loader";
 
@@ -23,6 +24,9 @@ interface TilesetStore {
   /** Whether the animation definer panel is open */
   animDefinerOpen: boolean;
 
+  /** Persisted walkability data (parallel to tilesets[]) */
+  tilesetWalkability: boolean[][];
+
   loadTilesets: (basePath: string) => Promise<void>;
   setActiveTileset: (index: number) => void;
   setSelectedTiles: (sel: TileSelection | null) => void;
@@ -40,7 +44,9 @@ interface TilesetStore {
   _rebuildAnimationLookup: () => void;
 }
 
-export const useTilesetStore = create<TilesetStore>((set, get) => ({
+export const useTilesetStore = create<TilesetStore>()(
+  persist(
+    (set, get) => ({
   tilesets: [],
   activeTilesetIndex: 0,
   selectedTiles: null,
@@ -52,13 +58,26 @@ export const useTilesetStore = create<TilesetStore>((set, get) => ({
   animationGroups: [],
   animationLookup: new Map(),
   animDefinerOpen: false,
+  tilesetWalkability: [],
 
   loadTilesets: async (basePath: string) => {
     try {
       const tilesets = await loadAllTilesets(basePath, (loaded, total, name) => {
         set({ loadProgress: { loaded, total, currentName: name } });
       });
+
+      // Merge persisted walkability back into loaded tilesets
+      const { tilesetWalkability } = get();
+      if (tilesetWalkability.length > 0) {
+        for (let i = 0; i < tilesets.length && i < tilesetWalkability.length; i++) {
+          if (tilesetWalkability[i] && tilesetWalkability[i].length === tilesets[i].walkability.length) {
+            tilesets[i] = { ...tilesets[i], walkability: [...tilesetWalkability[i]] };
+          }
+        }
+      }
+
       set({ tilesets, loaded: true });
+      get()._rebuildAnimationLookup();
     } catch (err) {
       set({ loadError: err instanceof Error ? err.message : String(err) });
     }
@@ -69,18 +88,21 @@ export const useTilesetStore = create<TilesetStore>((set, get) => ({
   setSelectedTiles: (sel) => set({ selectedTiles: sel }),
 
   toggleWalkability: (tilesetIndex, localId) => {
-    const { tilesets } = get();
+    const { tilesets, tilesetWalkability } = get();
     const ts = tilesets[tilesetIndex];
     if (!ts) return;
     const newWalkability = [...ts.walkability];
     newWalkability[localId] = !newWalkability[localId];
     const newTilesets = [...tilesets];
     newTilesets[tilesetIndex] = { ...ts, walkability: newWalkability };
-    set({ tilesets: newTilesets });
+
+    const newTsWalk = [...tilesetWalkability];
+    newTsWalk[tilesetIndex] = newWalkability;
+    set({ tilesets: newTilesets, tilesetWalkability: newTsWalk });
   },
 
   setWalkability: (tilesetIndex, localId, walkable) => {
-    const { tilesets } = get();
+    const { tilesets, tilesetWalkability } = get();
     const ts = tilesets[tilesetIndex];
     if (!ts) return;
     if (ts.walkability[localId] === walkable) return;
@@ -88,7 +110,10 @@ export const useTilesetStore = create<TilesetStore>((set, get) => ({
     newWalkability[localId] = walkable;
     const newTilesets = [...tilesets];
     newTilesets[tilesetIndex] = { ...ts, walkability: newWalkability };
-    set({ tilesets: newTilesets });
+
+    const newTsWalk = [...tilesetWalkability];
+    newTsWalk[tilesetIndex] = newWalkability;
+    set({ tilesets: newTilesets, tilesetWalkability: newTsWalk });
   },
 
   getSelectedGids: () => {
@@ -191,4 +216,15 @@ export const useTilesetStore = create<TilesetStore>((set, get) => ({
 
     set({ animationLookup: lookup });
   },
-}));
+    }),
+    {
+      name: "seraph-editor-tileset",
+      version: 1,
+      partialize: (state) => ({
+        animationGroups: state.animationGroups,
+        activeTilesetIndex: state.activeTilesetIndex,
+        tilesetWalkability: state.tilesetWalkability,
+      }),
+    }
+  )
+);
