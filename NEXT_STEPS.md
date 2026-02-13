@@ -5,7 +5,7 @@
 
 ## Current State
 
-Phases 0-3 are complete and functional. 336 automated tests (281 backend, 55 frontend). Clean codebase with no TODOs/FIXMEs. The project's unique advantages — proactive intelligence, RPG village metaphor, five-pillar life model, screen awareness — are implemented but not fully leveraged in the UI.
+Phases 0-3 are complete and functional. 414 automated tests (359 backend, 55 frontend). Clean codebase with no TODOs/FIXMEs. The project's unique advantages — proactive intelligence, RPG village metaphor, five-pillar life model, screen awareness — are implemented but not fully leveraged in the UI.
 
 ---
 
@@ -21,9 +21,9 @@ Phases 0-3 are complete and functional. 336 automated tests (281 backend, 55 fro
 
 7. ~~**SKILL.md Plugin Ecosystem**~~ (4.1) — Done. Zero-code markdown plugins in `data/skills/`. YAML frontmatter, tool gating, runtime enable/disable via API + Settings UI. 3 bundled examples.
 
-## Tier 2: Robustness (prevents real user frustration)
+5. ~~**Agent Execution Timeout**~~ (3.5.6) — Done. `asyncio.wait_for` timeouts on REST chat (504), daily briefing, evening review, memory consolidation LLM + add_memory calls. DDGS web search timeout via constructor. 3 new settings: `agent_briefing_timeout` (60s), `consolidation_llm_timeout` (30s), `web_search_timeout` (15s). 5 new tests.
 
-5. **Agent Execution Timeout** (3.5.6) — Wrap agent runs in `asyncio.wait_for()` with configurable timeout (120s chat, 60s strategist). Without this, a slow API call hangs the session indefinitely with no feedback. Per-tool timeouts: shell 30s, browser 60s, others 15s.
+## Tier 2: Robustness (prevents real user frustration)
 
 6. **Token-Aware Context Window** (3.5.5) — Replace fixed 50-message window with adaptive token counting. Keep first 2 + last 20 messages, summarize the middle. Prevents silent quality degradation in long conversations.
 
@@ -51,4 +51,4 @@ Seraph's biggest advantages are **proactive intelligence** and **the RPG village
 - Village avatar doesn't reflect agent state → ambient states fix this
 - ~~Users can't control interruptions → interruption mode UI fixes this~~ ✓
 
-**Next priorities**: Agent execution timeout (prevents user frustration), token-aware context (prevents quality degradation), then Telegram bot (makes proactive intelligence useful in daily life).
+**Next priorities**: ~~Agent execution timeout (prevents user frustration)~~ ✓, token-aware context (prevents quality degradation), then Telegram bot (makes proactive intelligence useful in daily life).
