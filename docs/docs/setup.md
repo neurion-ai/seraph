@@ -28,7 +28,7 @@ OPENROUTER_API_KEY=sk-or-v1-your-key-here
 
 | Variable | Default | Description |
 |---|---|---|
-| `DEFAULT_MODEL` | `openrouter/anthropic/claude-sonnet-4` | LLM model for the agent |
+| `DEFAULT_MODEL` | `openrouter/x-ai/grok-4.1-fast` | LLM model for the agent (any OpenRouter model) |
 | `MODEL_TEMPERATURE` | `0.7` | Sampling temperature |
 | `MODEL_MAX_TOKENS` | `4096` | Max tokens per response |
 | `AGENT_MAX_STEPS` | `10` | Max reasoning steps per turn |
@@ -133,11 +133,19 @@ OCR requires the **Screen Recording** permission:
 
 **Note:** Starting with macOS Sequoia (15.0), the system shows a monthly confirmation prompt asking if you want to continue allowing screen recording. This cannot be suppressed. If permission is revoked, the daemon continues in window-only mode.
 
-## Optional: Things3
+## Optional: MCP Servers
+
+Seraph supports plug-and-play MCP server integration. Servers are configured in `data/mcp-servers.json` and can be managed three ways:
+
+- **CLI**: `./mcp.sh list`, `add <name> <url>`, `remove`, `enable`, `disable`, `test`
+- **Settings UI**: Add/remove/toggle servers in the Settings panel
+- **REST API**: `GET/POST /api/mcp/servers`, `PUT/DELETE /api/mcp/servers/{name}`
+
+No config file = no MCP tools, no errors. See `data/mcp-servers.example.json` for the format.
+
+### Things3 Example
 
 If you use [Things3](https://culturedcode.com/things/) for task management, Seraph can read and create tasks via MCP (22 tools).
-
-Quick setup:
 
 1. Install and start the MCP server as a LaunchAgent:
    ```bash
@@ -152,9 +160,9 @@ Quick setup:
    launchctl kickstart -k gui/$(id -u)/com.seraph.things-mcp
    ```
 
-4. The backend connects automatically via the `THINGS_MCP_URL` already set in `.env.dev`:
-   ```
-   THINGS_MCP_URL=http://host.docker.internal:9100/mcp
+4. Register the server:
+   ```bash
+   ./mcp.sh add things3 http://host.docker.internal:9100/mcp --desc "Things3 task manager"
    ```
 
 5. Restart the backend and check for `Connected to MCP server: 22 tools loaded` in logs.
@@ -203,6 +211,43 @@ Workarounds being evaluated:
 - **GitHub's hosted MCP endpoint**: `https://api.githubcopilot.com/mcp/`
 
 To track progress, see the `GITHUB_MCP_URL` setting in `.env.dev`.
+
+## Optional: SKILL.md Plugins
+
+Skills are zero-code markdown plugins that extend the agent's behavior. Drop a `.md` file in `data/skills/` with YAML frontmatter and the agent gains new capabilities via prompt injection.
+
+```yaml
+---
+name: code-review
+description: Reviews code for quality and best practices
+requires:
+  tools: [read_file]
+user_invocable: true
+enabled: true
+---
+
+When asked to review code, follow these steps:
+1. Read the file(s) mentioned
+2. Check for security issues, performance problems, and style violations
+3. Provide specific, actionable feedback
+```
+
+Skills can be managed via:
+- **Settings UI**: Toggle skills on/off in the Settings panel
+- **REST API**: `GET /api/skills`, `PUT /api/skills/{name}`, `POST /api/skills/reload`
+- **Tool gating**: Skills with `requires.tools` only activate when required tools are available
+
+Three bundled examples: `daily-standup.md`, `code-review.md`, `goal-reflection.md`.
+
+## Optional: Village Map Editor
+
+A standalone Tiled-compatible map editor for authoring the village map:
+
+```bash
+cd editor && npm install && npm run dev
+```
+
+Opens at `http://localhost:3001`. Outputs Tiled JSON consumed directly by the frontend VillageScene. See `editor/README.md` for full documentation.
 
 ## Resetting everything
 
