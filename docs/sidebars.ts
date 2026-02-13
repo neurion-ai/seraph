@@ -50,6 +50,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'architecture/tauri-analysis',
         'architecture/feature-comparison',
+        'architecture/recursive-delegation-research',
       ],
     },
   ],
