@@ -32,6 +32,7 @@ OPENROUTER_API_KEY=sk-or-v1-your-key-here
 | `MODEL_TEMPERATURE` | `0.7` | Sampling temperature |
 | `MODEL_MAX_TOKENS` | `4096` | Max tokens per response |
 | `AGENT_MAX_STEPS` | `10` | Max reasoning steps per turn |
+| `DEBUG` | `false` | Enable debug logging |
 
 ### Optional scheduling settings
 
@@ -44,6 +45,53 @@ These control when proactive features run (briefings, reviews, working hours):
 | `WORKING_HOURS_END` | `17` | Hour (24h) when working hours end |
 | `MORNING_BRIEFING_HOUR` | `8` | Hour for the daily morning briefing |
 | `EVENING_REVIEW_HOUR` | `21` | Hour for the evening review |
+| `MEMORY_CONSOLIDATION_INTERVAL_MIN` | `30` | Minutes between memory consolidation runs |
+| `GOAL_CHECK_INTERVAL_HOURS` | `4` | Hours between goal progress checks |
+| `CALENDAR_SCAN_INTERVAL_MIN` | `15` | Minutes between calendar scans |
+| `STRATEGIST_INTERVAL_MIN` | `15` | Minutes between strategist ticks |
+| `SCHEDULER_ENABLED` | `true` | Enable/disable background scheduler |
+
+### Optional observer settings
+
+These control the observer system and proactive behavior:
+
+| Variable | Default | Description |
+|---|---|---|
+| `PROACTIVITY_LEVEL` | `3` | Proactivity scale (1–5, higher = more proactive) |
+| `OBSERVER_GIT_REPO_PATH` | (empty) | Path to a git repo for commit-aware context |
+| `DEEP_WORK_APPS` | (empty) | Comma-separated extra app keywords that trigger deep work state |
+
+### Optional timeout settings
+
+These control execution timeouts for agent and tool operations:
+
+| Variable | Default | Description |
+|---|---|---|
+| `AGENT_CHAT_TIMEOUT` | `120` | Seconds before chat agent execution times out |
+| `AGENT_STRATEGIST_TIMEOUT` | `60` | Seconds before strategist agent times out |
+| `AGENT_BRIEFING_TIMEOUT` | `60` | Seconds before daily briefing / evening review times out |
+| `CONSOLIDATION_LLM_TIMEOUT` | `30` | Seconds before memory consolidation LLM call times out |
+| `WEB_SEARCH_TIMEOUT` | `15` | Seconds before web search times out |
+
+### Optional context window settings
+
+These control how conversation history is trimmed before being sent to the LLM:
+
+| Variable | Default | Description |
+|---|---|---|
+| `CONTEXT_WINDOW_TOKEN_BUDGET` | `12000` | Max tokens for conversation history |
+| `CONTEXT_WINDOW_KEEP_FIRST` | `2` | Always keep first N messages (preserves onboarding context) |
+| `CONTEXT_WINDOW_KEEP_RECENT` | `20` | Always keep last N messages |
+
+### Optional delegation settings
+
+Recursive delegation is an experimental feature where the agent delegates to specialist sub-agents:
+
+| Variable | Default | Description |
+|---|---|---|
+| `USE_DELEGATION` | `false` | Enable orchestrator + specialist agents mode |
+| `DELEGATION_MAX_DEPTH` | `1` | Max nesting depth (1 = orchestrator → specialists) |
+| `ORCHESTRATOR_MAX_STEPS` | `8` | Max delegation steps for orchestrator |
 
 All settings with their defaults are defined in `backend/config/settings.py`.
 
@@ -169,15 +217,17 @@ If you use [Things3](https://culturedcode.com/things/) for task management, Sera
 
 See **[Things3 MCP Integration](./integrations/things3-mcp)** for the full tool list, LaunchAgent management, and troubleshooting.
 
-## Optional: Google Calendar & Gmail
+## Optional: Google Calendar
 
-Seraph can read/create calendar events and read/send emails via Google APIs.
+Seraph can read your Google Calendar as an observer data source. Upcoming events are included in the strategist's context, enabling calendar-aware proactive features (e.g., meeting detection, schedule-aware nudges). This is **not** a user-facing tool — the agent cannot create or modify calendar events directly.
+
+**Note:** For full calendar management (create/edit/delete events), use a calendar MCP server instead.
 
 ### 1. Create OAuth credentials
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Create a new project (or use an existing one)
-3. Enable the **Google Calendar API** and **Gmail API**
+3. Enable the **Google Calendar API**
 4. Go to **APIs & Services > Credentials** > **Create Credentials** > **OAuth client ID**
 5. Application type: **Desktop app**
 6. Configure the **OAuth consent screen** (External is fine for personal use; add yourself as a test user)
@@ -195,12 +245,9 @@ This directory is volume-mounted into Docker at `/app/config/`, so the backend c
 
 ### 3. First-run OAuth flow
 
-On first use of a calendar or email tool, the backend will initiate an OAuth consent flow in the container logs. Follow the URL to authorize access. Token files are created automatically:
+On the first calendar scan, the backend will initiate an OAuth consent flow in the container logs. Follow the URL to authorize read access. A token file (`google_calendar_token.json`) is created automatically in the backend data directory.
 
-- `google_calendar_token.json` — stored in the backend data directory
-- `google_gmail_token.json` — stored in the backend data directory (separate token for Gmail)
-
-After initial authorization, tokens refresh automatically.
+After initial authorization, the token refreshes automatically. If no credentials are configured, the calendar source silently returns empty — no errors are raised.
 
 ## Optional: GitHub MCP
 
@@ -210,7 +257,7 @@ Workarounds being evaluated:
 - **mcp-proxy**: stdio-to-HTTP bridge
 - **GitHub's hosted MCP endpoint**: `https://api.githubcopilot.com/mcp/`
 
-To track progress, see the `GITHUB_MCP_URL` setting in `.env.dev`.
+Once a working transport is available, register it via `./mcp.sh add github <url>`.
 
 ## Optional: SKILL.md Plugins
 
@@ -278,5 +325,5 @@ localStorage.clear()
 | Daemon exits immediately | Missing PyObjC | Run `cd daemon && uv pip install -r requirements.txt` |
 | `Failed to connect to MCP server` | Things3 MCP not running | Check: `curl http://localhost:9100/mcp`; ensure LaunchAgent is loaded |
 | `unable to open database file` (Things3) | Full Disk Access not granted to `uvx` | Grant FDA, then restart the things-mcp service |
-| Google Calendar/Gmail: "credentials not found" | Missing `google_credentials.json` | Place OAuth credentials at `backend/config/google_credentials.json` |
-| Google Calendar/Gmail: OAuth flow fails | Container can't open browser | Copy the auth URL from container logs and open it in your host browser |
+| Google Calendar: "credentials not found" | Missing `google_credentials.json` | Place OAuth credentials at `backend/config/google_credentials.json` |
+| Google Calendar: OAuth flow fails | Container can't open browser | Copy the auth URL from container logs and open it in your host browser |
