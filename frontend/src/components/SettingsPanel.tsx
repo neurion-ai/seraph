@@ -49,6 +49,58 @@ function SkillRow({
   );
 }
 
+interface CatalogItem {
+  name: string;
+  type: "skill" | "mcp_server";
+  description: string;
+  category: string;
+  requires_tools: string[];
+  installed: boolean;
+  bundled: boolean;
+}
+
+function CatalogRow({
+  item,
+  onInstall,
+  installing,
+}: {
+  item: CatalogItem;
+  onInstall: (name: string) => void;
+  installing: string | null;
+}) {
+  const statusColor = item.installed ? "bg-green-400" : "bg-retro-text/30";
+  const typeBadge = item.type === "skill" ? "skill" : "mcp";
+
+  return (
+    <div className="flex items-center gap-1 px-1 py-0.5 border-b border-retro-text/10 last:border-b-0">
+      <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusColor}`} />
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] font-bold text-retro-text truncate">
+          {item.name}
+          <span className="text-retro-highlight/50 ml-1 font-normal">{typeBadge}</span>
+        </div>
+        <div className="text-[9px] text-retro-text/40 truncate">
+          {item.description}
+          {item.requires_tools.length > 0 && (
+            <span> · needs: {item.requires_tools.join(", ")}</span>
+          )}
+        </div>
+      </div>
+      {item.installed ? (
+        <span className="text-[9px] text-green-400/60 px-0.5">installed</span>
+      ) : (
+        <button
+          onClick={() => onInstall(item.name)}
+          disabled={installing === item.name}
+          className="text-[9px] text-retro-highlight hover:text-retro-text px-0.5 disabled:text-retro-text/20"
+        >
+          {installing === item.name ? "..." : "install"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 interface McpServer {
   name: string;
   url: string;
@@ -213,6 +265,8 @@ export function SettingsPanel() {
   const [skills, setSkills] = useState<SkillInfo[]>([]);
   const [servers, setServers] = useState<McpServer[]>([]);
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
+  const [installing, setInstalling] = useState<string | null>(null);
 
   const fetchSkills = useCallback(async () => {
     try {
@@ -238,12 +292,25 @@ export function SettingsPanel() {
     }
   }, []);
 
+  const fetchCatalog = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/catalog`);
+      if (res.ok) {
+        const data = await res.json();
+        setCatalogItems(data.items ?? []);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   useEffect(() => {
     if (settingsPanelOpen) {
       fetchSkills();
       fetchServers();
+      fetchCatalog();
     }
-  }, [settingsPanelOpen, fetchSkills, fetchServers]);
+  }, [settingsPanelOpen, fetchSkills, fetchServers, fetchCatalog]);
 
   const handleSkillToggle = async (name: string, enabled: boolean) => {
     try {
@@ -265,6 +332,21 @@ export function SettingsPanel() {
     } catch {
       // ignore
     }
+  };
+
+  const handleInstall = async (name: string) => {
+    setInstalling(name);
+    try {
+      const res = await fetch(`${API_URL}/api/catalog/install/${name}`, { method: "POST" });
+      if (res.ok) {
+        fetchCatalog();
+        fetchSkills();
+        fetchServers();
+      }
+    } catch {
+      // ignore
+    }
+    setInstalling(null);
   };
 
   const handleToggle = async (name: string, enabled: boolean) => {
@@ -360,6 +442,26 @@ export function SettingsPanel() {
             >
               Reload skills
             </button>
+          </div>
+
+          <div className="px-1">
+            <div className="text-[10px] uppercase tracking-wider text-retro-border font-bold mb-1">
+              Discover
+            </div>
+            {catalogItems.length > 0 ? (
+              <div className="border border-retro-text/10 rounded mb-1">
+                {catalogItems.map((item) => (
+                  <CatalogRow
+                    key={item.name}
+                    item={item}
+                    onInstall={handleInstall}
+                    installing={installing}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-[9px] text-retro-text/30 mb-1 px-1">No catalog items available</div>
+            )}
           </div>
 
           {import.meta.env.DEV && (

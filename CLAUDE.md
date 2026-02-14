@@ -35,7 +35,7 @@ Seraph is an AI agent with a retro 16-bit RPG village UI. A Phaser 3 canvas rend
   - `src/components/chat/` - ChatPanel, ChatSidebar, SessionList, MessageList, MessageBubble, ChatInput, ThinkingIndicator, DialogFrame (RPG frame with optional maximize/close buttons)
   - `src/components/quest/` - QuestPanel (search/filter by title, level, domain), GoalTree, GoalForm, DomainStats
   - `src/components/settings/InterruptionModeToggle.tsx` - Focus/Balanced/Active mode toggle for proactive message delivery
-  - `src/components/SettingsPanel.tsx` - Standalone settings overlay panel (restart onboarding, interruption mode, skills management, MCP server management UI, version)
+  - `src/components/SettingsPanel.tsx` - Standalone settings overlay panel (restart onboarding, interruption mode, skills management, Discover catalog, MCP server management UI, version)
   - `src/components/HudButtons.tsx` - Floating RPG-styled buttons to reopen closed Chat/Quest/Settings panels + ambient state indicator dot (color-coded, pulsing)
   - `src/index.css` - CRT scanlines/vignette, pixel borders, RPG frame, chat-overlay maximized state
 
@@ -79,6 +79,7 @@ Seraph is an AI agent with a retro 16-bit RPG village UI. A Phaser 3 canvas rend
   - `src/api/tools.py` — `GET /api/tools` (returns building metadata per tool for dynamic frontend registration)
   - `src/api/mcp.py` — `GET /api/mcp/servers`, `POST /api/mcp/servers`, `PUT /api/mcp/servers/{name}`, `DELETE /api/mcp/servers/{name}`, `POST /api/mcp/servers/{name}/test`
   - `src/api/skills.py` — `GET /api/skills`, `PUT /api/skills/{name}`, `POST /api/skills/reload`
+  - `src/api/catalog.py` — `GET /api/catalog` (browse catalog with install status), `POST /api/catalog/install/{name}` (install skill or MCP server from catalog)
   - `src/api/observer.py` — `GET /api/observer/state`, `POST /api/observer/context` (receives daemon screen data), `POST /api/observer/refresh` (debug)
   - `src/api/settings.py` — `GET /api/settings/interruption-mode`, `PUT /api/settings/interruption-mode`
   - `/health` — health check (defined in `src/app.py`)
@@ -93,8 +94,10 @@ Seraph is an AI agent with a retro 16-bit RPG village UI. A Phaser 3 canvas rend
 - **MCP Configuration** (`data/mcp-servers.json`):
   - JSON config with `mcpServers` object: `{name: {url, enabled, description?}}`
   - `data/mcp-servers.example.json` committed to repo as reference
+  - `data/mcp-servers.default.json` — seed config template; copied to workspace on first run if no config exists
   - Loaded on app startup from `settings.workspace_dir + "/mcp-servers.json"`
-  - No config file = no MCP tools, no errors
+  - First run seeds from `mcp-servers.default.json` (2 entries: `http-request`, `github` — both `enabled: false`)
+  - No config file and no default = no MCP tools, no errors
 - **Skills** (`src/skills/`): SKILL.md plugin ecosystem — zero-code markdown plugins
   - `loader.py` — `Skill` dataclass, YAML frontmatter parser, directory scanner (`load_skills()`)
   - `manager.py` — Singleton `skill_manager`; runtime enable/disable, tool gating, config persistence via `data/skills-config.json`
@@ -103,7 +106,8 @@ Seraph is an AI agent with a retro 16-bit RPG village UI. A Phaser 3 canvas rend
   - Tool gating: skills with `requires.tools` are only loaded if all required tools are available
   - Runtime state: `GET /api/skills` lists all, `PUT /api/skills/{name}` toggles, `POST /api/skills/reload` re-scans directory
   - Disabled skills tracked in `data/skills-config.json`, survives reload
-  - 3 bundled examples: `daily-standup.md`, `code-review.md`, `goal-reflection.md`
+  - 8 bundled skills: `daily-standup.md`, `code-review.md`, `goal-reflection.md`, `weekly-planner.md`, `morning-intention.md`, `evening-journal.md`, `moltbook.md` (requires `http_request`), `web-briefing.md` (requires `http_request` + `web_search`)
+  - MCP-dependent skills (`moltbook`, `web-briefing`) auto-deactivate via tool gating when `http_request` tool unavailable
 - **Memory** (`src/memory/`):
   - `soul.py` — Persistent identity file (markdown in workspace)
   - `vector_store.py` — LanceDB vector store for long-term memory search
@@ -156,10 +160,21 @@ Seraph is an AI agent with a retro 16-bit RPG village UI. A Phaser 3 canvas rend
 - **Quick start with OCR**: `./daemon/run.sh --ocr --verbose`
 - **Manual run**: `cd daemon && uv pip install -r requirements.txt && uv run python seraph_daemon.py --verbose`
 
+### HTTP MCP Server (`mcp-servers/http-request/`)
+- **Stack**: Python 3.12, FastMCP, httpx
+- **Entry**: `server.py` — single `http_request` tool via FastMCP (port 9200, streamable-http transport)
+- **Tool**: `http_request(method, url, headers?, body?, timeout?)` → `{status, headers, body}`
+- **Methods**: GET, POST, PUT, DELETE, PATCH, HEAD
+- **Security**: `_is_internal_url()` blocks localhost, private IPs (10.x, 172.16.x, 192.168.x), .local/.internal hostnames
+- **Timeout**: clamped 1-60s, default 30s
+- **Response cap**: body truncated at 50,000 chars
+- **Docker**: Python 3.12-slim, internal network only (no exposed ports), backend connects at `http://http-mcp:9200/mcp`
+
 ### Infrastructure
-- `docker-compose.dev.yaml` - Three services (github-mcp commented out):
+- `docker-compose.dev.yaml` - Four services (github-mcp commented out):
   - `backend-dev` (8004:8003) — FastAPI + uvicorn, depends on sandbox
   - `sandbox-dev` — snekbox (sandboxed Python execution for `shell_execute`), `linux/amd64`, privileged, internal network only
+  - `http-mcp` — FastMCP HTTP request tool server (internal network only, port 9200); built from `mcp-servers/http-request/`
   - `frontend-dev` (3000:5173) — Vite dev server
   - `github-mcp` (commented out) — `ghcr.io/github/github-mcp-server` only supports stdio; needs mcp-proxy or use GitHub's hosted endpoint `https://api.githubcopilot.com/mcp/`
 - `manage.sh` - Docker management: `./manage.sh -e dev up -d`, `down`, `logs -f`, `build`
@@ -315,3 +330,6 @@ deliver_or_queue()  ← attention guardian (Phase 3.3)
 7. **Tile stacking via CellStack** — `number[]` per cell per layer allows overlapping tiles (e.g. decoration on terrain). Serialized as Tiled sublayers (`layer__N`) for format compatibility.
 8. **Editor as standalone app** — Separate Vite app (`editor/`) with own stores and components; shares tileset/sprite assets from `frontend/public/assets/` via proxy. Outputs Tiled JSON consumed directly by VillageScene.
 9. **SKILL.md plugins** — Zero-code markdown files with YAML frontmatter. Drop in `data/skills/`, agent gains capabilities via prompt injection. Tool gating ensures skills only activate when required tools exist. Runtime enable/disable via API + Settings UI.
+10. **Bundled HTTP MCP server** — Self-hosted FastMCP server (`mcp-servers/http-request/`) exposing `http_request` tool for arbitrary REST API calls. Runs as Docker service on internal network. Security: blocks internal/private IPs, clamps timeout 1-60s.
+11. **Discover catalog** — Curated catalog (`data/skill-catalog.json`) of skills and MCP servers. Browse in Settings UI, one-click install. Catalog API (`GET /api/catalog`, `POST /api/catalog/install/{name}`) copies bundled skill files or adds MCP config entries. All MCP entries install as `enabled: false`.
+12. **MCP seed config** — On first startup, `mcp-servers.default.json` is copied to workspace if no config exists. Ships with `http-request` and `github` entries (both disabled). Existing configs are never overwritten.

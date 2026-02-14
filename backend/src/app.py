@@ -39,6 +39,12 @@ async def lifespan(app: FastAPI):
         import logging
         logging.getLogger(__name__).warning("Initial context refresh failed", exc_info=True)
     mcp_config = os.path.join(settings.workspace_dir, "mcp-servers.json")
+    if not os.path.exists(mcp_config):
+        default_config = os.path.join(os.path.dirname(__file__), "../data/mcp-servers.default.json")
+        if os.path.isfile(default_config):
+            import shutil
+            os.makedirs(os.path.dirname(mcp_config), exist_ok=True)
+            shutil.copy2(default_config, mcp_config)
     mcp_manager.load_config(mcp_config)
     skills_dir = os.path.join(settings.workspace_dir, "skills")
     os.makedirs(skills_dir, exist_ok=True)

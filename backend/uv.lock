@@ -212,6 +212,7 @@ dependencies = [
     { name = "slowapi" },
     { name = "smolagents", extra = ["litellm", "mcp"] },
     { name = "sqlmodel" },
+    { name = "tiktoken" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "websockets" },
 ]
@@ -245,6 +246,7 @@ requires-dist = [
     { name = "slowapi", specifier = ">=0.1.9" },
     { name = "smolagents", extras = ["litellm", "mcp"], specifier = ">=1.24.0" },
     { name = "sqlmodel", specifier = ">=0.0.22" },
+    { name = "tiktoken", specifier = ">=0.8" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0" },
     { name = "websockets", specifier = ">=14.0" },
 ]

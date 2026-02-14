@@ -1,0 +1,76 @@
+{
+  "skills": [
+    {
+      "name": "daily-standup",
+      "description": "Generate a standup report from git and goals",
+      "category": "productivity",
+      "requires_tools": ["shell_execute", "get_goals"],
+      "bundled": true
+    },
+    {
+      "name": "code-review",
+      "description": "Review a file with structured feedback",
+      "category": "development",
+      "requires_tools": ["shell_execute", "read_file"],
+      "bundled": true
+    },
+    {
+      "name": "goal-reflection",
+      "description": "Weekly goal reflection comparing progress to soul values",
+      "category": "productivity",
+      "requires_tools": ["get_goals", "get_goal_progress", "view_soul"],
+      "bundled": true
+    },
+    {
+      "name": "weekly-planner",
+      "description": "Plan the week from soul priorities and active goals",
+      "category": "productivity",
+      "requires_tools": ["get_goals", "create_goal", "view_soul"],
+      "bundled": true
+    },
+    {
+      "name": "morning-intention",
+      "description": "Set a soul-aligned daily intention with top 3 tasks",
+      "category": "productivity",
+      "requires_tools": ["get_goals", "view_soul"],
+      "bundled": true
+    },
+    {
+      "name": "evening-journal",
+      "description": "Guided evening reflection on wins, learnings, and gratitude",
+      "category": "productivity",
+      "requires_tools": ["get_goals", "get_goal_progress"],
+      "bundled": true
+    },
+    {
+      "name": "moltbook",
+      "description": "Interact with the Moltbook social API — post, comment, browse feed",
+      "category": "integration",
+      "requires_tools": ["http_request"],
+      "bundled": true
+    },
+    {
+      "name": "web-briefing",
+      "description": "Fetch URLs and summarize into a structured briefing",
+      "category": "research",
+      "requires_tools": ["http_request", "web_search"],
+      "bundled": true
+    }
+  ],
+  "mcp_servers": [
+    {
+      "name": "http-request",
+      "description": "Make HTTP requests to external APIs",
+      "category": "integration",
+      "url": "http://http-mcp:9200/mcp",
+      "bundled": true
+    },
+    {
+      "name": "github",
+      "description": "GitHub integration (requires GITHUB_TOKEN env var)",
+      "category": "development",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "bundled": false
+    }
+  ]
+}

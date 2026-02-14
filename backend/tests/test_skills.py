@@ -251,6 +251,48 @@ class TestSkillManager:
         assert all("enabled" in s for s in lst)
         assert all("requires_tools" in s for s in lst)
 
+    def test_mcp_dependent_skill_inactive_without_tool(self, tmp_path):
+        """A skill requiring http_request should be inactive when tool is unavailable."""
+        d = tmp_path / "skills"
+        d.mkdir()
+        (d / "mcp-skill.md").write_text(
+            "---\n"
+            "name: mcp-skill\n"
+            "description: Needs MCP tool\n"
+            "requires:\n"
+            "  tools: [http_request]\n"
+            "---\n\n"
+            "Use http_request to do things."
+        )
+        mgr = SkillManager()
+        mgr.init(str(d))
+
+        # Without http_request in available tools
+        active = mgr.get_active_skills(["web_search", "read_file"])
+        names = {s.name for s in active}
+        assert "mcp-skill" not in names
+
+    def test_mcp_dependent_skill_active_with_tool(self, tmp_path):
+        """A skill requiring http_request should be active when tool is available."""
+        d = tmp_path / "skills"
+        d.mkdir()
+        (d / "mcp-skill.md").write_text(
+            "---\n"
+            "name: mcp-skill\n"
+            "description: Needs MCP tool\n"
+            "requires:\n"
+            "  tools: [http_request]\n"
+            "---\n\n"
+            "Use http_request to do things."
+        )
+        mgr = SkillManager()
+        mgr.init(str(d))
+
+        # With http_request available
+        active = mgr.get_active_skills(["http_request", "web_search"])
+        names = {s.name for s in active}
+        assert "mcp-skill" in names
+
 
 # ── TestSkillAPI ─────────────────────────────────────────
 

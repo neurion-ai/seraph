@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "http-request": {
+      "url": "http://http-mcp:9200/mcp",
+      "enabled": false,
+      "description": "Make HTTP requests to external APIs"
+    },
+    "github": {
+      "url": "https://api.githubcopilot.com/mcp/",
+      "enabled": false,
+      "description": "GitHub integration (requires GITHUB_TOKEN env var)"
+    }
+  }
+}
