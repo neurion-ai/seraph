@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 import httpx
 from fastmcp import FastMCP
 
-mcp = FastMCP("http-request", port=9200)
+mcp = FastMCP("http-request", host="0.0.0.0", port=9200)
 
 _BLOCKED_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "[::1]"}
 
