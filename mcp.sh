@@ -40,12 +40,8 @@ ensure_config() {
     fi
 }
 
-hot_reload() {
-    # If backend is running, notify it to refresh tool registry
-    if curl -sf "$API_URL/health" &>/dev/null; then
-        echo "  ↳ Backend is running — changes will take effect on next restart"
-        echo "    (or use the Settings UI / API for immediate hot-reload)"
-    fi
+backend_is_running() {
+    curl -sf "$API_URL/health" &>/dev/null
 }
 
 # --- Commands ---
@@ -108,13 +104,32 @@ cmd_add() {
         esac
     done
 
-    # Check if server already exists
+    # If backend is running, use API (hot-reloads + persists)
+    if backend_is_running; then
+        local body
+        body=$(jq -n --arg name "$name" --arg url "$url" --arg desc "$description" \
+            '{name: $name, url: $url, enabled: true} +
+             (if $desc != "" then {description: $desc} else {} end)')
+        local http_code
+        http_code=$(curl -sf -o /dev/null -w "%{http_code}" -X POST "$API_URL/api/mcp/servers" \
+            -H "Content-Type: application/json" -d "$body" 2>/dev/null) || true
+        if [[ "$http_code" == "201" ]]; then
+            echo "Added MCP server '$name' → $url"
+            [[ -n "$description" ]] && echo "  Description: $description"
+            echo "  ↳ Live-reloaded in backend"
+            return
+        elif [[ "$http_code" == "409" ]]; then
+            echo "Error: Server '$name' already exists. Remove it first with: ./mcp.sh remove $name" >&2
+            exit 1
+        fi
+    fi
+
+    # Fallback: edit config file directly (backend offline)
     if jq -e ".mcpServers[\"$name\"]" "$CONFIG_FILE" &>/dev/null; then
         echo "Error: Server '$name' already exists. Remove it first with: ./mcp.sh remove $name" >&2
         exit 1
     fi
 
-    # Build the server object
     local server_json
     server_json=$(jq -n \
         --arg url "$url" \
@@ -122,14 +137,12 @@ cmd_add() {
         '{url: $url, enabled: true} +
          (if $description != "" then {description: $description} else {} end)')
 
-    # Add to config
     jq --arg name "$name" --argjson server "$server_json" \
         '.mcpServers[$name] = $server' "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && \
         mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
 
     echo "Added MCP server '$name' → $url"
     [[ -n "$description" ]] && echo "  Description: $description"
-    hot_reload
 }
 
 cmd_remove() {
@@ -143,6 +156,19 @@ cmd_remove() {
 
     local name="$1"
 
+    if backend_is_running; then
+        local http_code
+        http_code=$(curl -sf -o /dev/null -w "%{http_code}" -X DELETE "$API_URL/api/mcp/servers/$name" 2>/dev/null) || true
+        if [[ "$http_code" == "200" ]]; then
+            echo "Removed MCP server '$name'"
+            echo "  ↳ Live-reloaded in backend"
+            return
+        elif [[ "$http_code" == "404" ]]; then
+            echo "Error: Server '$name' not found." >&2
+            exit 1
+        fi
+    fi
+
     if ! jq -e ".mcpServers[\"$name\"]" "$CONFIG_FILE" &>/dev/null; then
         echo "Error: Server '$name' not found." >&2
         exit 1
@@ -152,7 +178,6 @@ cmd_remove() {
         mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
 
     echo "Removed MCP server '$name'"
-    hot_reload
 }
 
 cmd_enable() {
@@ -166,6 +191,20 @@ cmd_enable() {
 
     local name="$1"
 
+    if backend_is_running; then
+        local http_code
+        http_code=$(curl -sf -o /dev/null -w "%{http_code}" -X PUT "$API_URL/api/mcp/servers/$name" \
+            -H "Content-Type: application/json" -d '{"enabled":true}' 2>/dev/null) || true
+        if [[ "$http_code" == "200" ]]; then
+            echo "Enabled MCP server '$name'"
+            echo "  ↳ Live-reloaded in backend"
+            return
+        elif [[ "$http_code" == "404" ]]; then
+            echo "Error: Server '$name' not found." >&2
+            exit 1
+        fi
+    fi
+
     if ! jq -e ".mcpServers[\"$name\"]" "$CONFIG_FILE" &>/dev/null; then
         echo "Error: Server '$name' not found." >&2
         exit 1
@@ -175,7 +214,6 @@ cmd_enable() {
         mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
 
     echo "Enabled MCP server '$name'"
-    hot_reload
 }
 
 cmd_disable() {
@@ -189,6 +227,20 @@ cmd_disable() {
 
     local name="$1"
 
+    if backend_is_running; then
+        local http_code
+        http_code=$(curl -sf -o /dev/null -w "%{http_code}" -X PUT "$API_URL/api/mcp/servers/$name" \
+            -H "Content-Type: application/json" -d '{"enabled":false}' 2>/dev/null) || true
+        if [[ "$http_code" == "200" ]]; then
+            echo "Disabled MCP server '$name'"
+            echo "  ↳ Live-reloaded in backend"
+            return
+        elif [[ "$http_code" == "404" ]]; then
+            echo "Error: Server '$name' not found." >&2
+            exit 1
+        fi
+    fi
+
     if ! jq -e ".mcpServers[\"$name\"]" "$CONFIG_FILE" &>/dev/null; then
         echo "Error: Server '$name' not found." >&2
         exit 1
@@ -198,7 +250,6 @@ cmd_disable() {
         mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
 
     echo "Disabled MCP server '$name'"
-    hot_reload
 }
 
 cmd_test() {

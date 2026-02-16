@@ -453,6 +453,13 @@ export function SettingsPanel() {
     }
   }, [settingsPanelOpen, fetchSkills, fetchServers, fetchCatalog]);
 
+  // Poll MCP servers while panel is open to catch external changes (mcp.sh, API)
+  useEffect(() => {
+    if (!settingsPanelOpen) return;
+    const id = setInterval(fetchServers, 5000);
+    return () => clearInterval(id);
+  }, [settingsPanelOpen, fetchServers]);
+
   const handleSkillToggle = async (name: string, enabled: boolean) => {
     try {
       await fetch(`${API_URL}/api/skills/${name}`, {
